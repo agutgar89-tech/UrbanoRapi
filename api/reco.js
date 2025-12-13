@@ -1,4 +1,4 @@
-// api/scoring.js
+// api/scoring2025.js
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
