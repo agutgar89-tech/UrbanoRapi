@@ -1,0 +1,1563 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Control de Tarjetas de Crédito</title>
+<style>
+:root{
+  --bg:#f4f5f7; --panel:#ffffff; --panel-2:#fafbfc; --line:#e3e6ea;
+  --tx:#1a1d21; --tx-2:#5f6672; --tx-3:#8b93a1;
+  --acc:#2f6df6; --acc-soft:#e8f0ff;
+  --ok:#1a8f5a; --ok-soft:#e4f6ed;
+  --warn:#b7791f; --warn-soft:#fdf3e0;
+  --bad:#d13b3b; --bad-soft:#fdeaea;
+  --radius:12px;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#12151a; --panel:#1a1e25; --panel-2:#20252d; --line:#2b313b;
+    --tx:#e8ebf0; --tx-2:#a3abb8; --tx-3:#767f8c;
+    --acc:#5b8dff; --acc-soft:#1d2942;
+    --ok:#43c98a; --ok-soft:#152c22;
+    --warn:#e0a94a; --warn-soft:#302615;
+    --bad:#f0716f; --bad-soft:#33191a;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);
+  font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  -webkit-text-size-adjust:100%}
+h1,h2,h3{margin:0;font-weight:650;letter-spacing:-.01em}
+a{color:var(--acc)}
+.wrap{max-width:1180px;margin:0 auto;padding:0 16px 80px}
+
+/* Header */
+header{background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:40}
+.hd{max-width:1180px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.brand{font-size:17px;font-weight:700;display:flex;align-items:center;gap:8px}
+.brand span{font-size:20px}
+.hd .sp{flex:1}
+nav{display:flex;gap:2px;overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:touch}
+nav button{background:none;border:0;padding:8px 13px;border-radius:8px;color:var(--tx-2);
+  font-size:14px;font-weight:550;cursor:pointer;white-space:nowrap}
+nav button:hover{background:var(--panel-2);color:var(--tx)}
+nav button.on{background:var(--acc-soft);color:var(--acc)}
+
+/* Botones */
+button.btn{background:var(--acc);color:#fff;border:0;border-radius:9px;padding:9px 15px;
+  font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
+button.btn:hover{filter:brightness(1.08)}
+button.btn.ghost{background:var(--panel);color:var(--tx);border:1px solid var(--line)}
+button.btn.ghost:hover{background:var(--panel-2);filter:none}
+button.btn.danger{background:var(--bad)}
+button.btn.sm{padding:5px 10px;font-size:13px;border-radius:7px}
+.ico{background:none;border:0;color:var(--tx-3);cursor:pointer;padding:4px 6px;border-radius:6px;font-size:14px}
+.ico:hover{background:var(--panel-2);color:var(--tx)}
+
+/* Paneles */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:16px}
+.card>h2{font-size:15px;margin-bottom:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card>h2 .sp{flex:1}
+.sub{color:var(--tx-2);font-size:13px}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.g4{grid-template-columns:repeat(auto-fit,minmax(165px,1fr))}
+
+/* KPI */
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px}
+.kpi .lbl{font-size:12px;color:var(--tx-2);text-transform:uppercase;letter-spacing:.04em;font-weight:600}
+.kpi .val{font-size:24px;font-weight:700;margin-top:6px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.kpi .hint{font-size:12px;color:var(--tx-3);margin-top:3px}
+.kpi.bad .val{color:var(--bad)} .kpi.ok .val{color:var(--ok)} .kpi.warn .val{color:var(--warn)}
+
+/* Tarjeta de crédito */
+.cc{border-radius:14px;padding:16px;color:#fff;position:relative;overflow:hidden;min-height:150px;
+  display:flex;flex-direction:column;box-shadow:0 2px 10px rgba(0,0,0,.13)}
+.cc .cc-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.cc .cc-bank{font-size:12px;opacity:.8;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.cc .cc-name{font-size:17px;font-weight:700;margin-top:2px}
+.cc .cc-num{font-family:var(--mono);font-size:13px;opacity:.75;margin-top:2px}
+.cc .cc-saldo{margin-top:auto;padding-top:12px}
+.cc .cc-saldo .l{font-size:11px;opacity:.8;text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+.cc .cc-saldo .v{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.cc .cc-meta{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;opacity:.9;margin-top:8px}
+.cc .cc-acts{position:absolute;top:12px;right:12px;display:flex;gap:2px}
+.cc .cc-acts button{background:rgba(255,255,255,.18);border:0;color:#fff;border-radius:6px;
+  padding:3px 7px;font-size:12px;cursor:pointer}
+.cc .cc-acts button:hover{background:rgba(255,255,255,.32)}
+.bar{height:5px;background:rgba(255,255,255,.25);border-radius:3px;margin-top:9px;overflow:hidden}
+.bar i{display:block;height:100%;background:#fff;border-radius:3px}
+
+/* Tablas */
+.tw{overflow-x:auto;margin:0 -18px;padding:0 18px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--tx-2);
+  font-weight:650;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:hover{background:var(--panel-2)}
+tbody tr:last-child td{border-bottom:0}
+.num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono);font-size:13px;white-space:nowrap}
+.neg{color:var(--bad)} .pos{color:var(--ok)}
+
+/* Etiquetas */
+.tag{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11.5px;font-weight:600;white-space:nowrap}
+.tag.gris{background:var(--panel-2);color:var(--tx-2);border:1px solid var(--line)}
+.tag.azul{background:var(--acc-soft);color:var(--acc)}
+.tag.verde{background:var(--ok-soft);color:var(--ok)}
+.tag.ambar{background:var(--warn-soft);color:var(--warn)}
+.tag.rojo{background:var(--bad-soft);color:var(--bad)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+
+/* Formularios */
+label{display:block;font-size:12px;font-weight:600;color:var(--tx-2);margin-bottom:5px}
+input,select,textarea{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;
+  background:var(--panel-2);color:var(--tx);font:inherit;font-size:14px}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transparent}
+textarea{min-height:70px;resize:vertical;font-size:13px}
+.field{margin-bottom:13px}
+.fgrid{display:grid;gap:0 13px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.filtros{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px}
+.filtros .field{margin-bottom:0;min-width:135px}
+
+/* Modal */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:flex-start;
+  justify-content:center;z-index:100;padding:20px;overflow-y:auto}
+.ov.on{display:flex}
+.modal{background:var(--panel);border-radius:14px;max-width:620px;width:100%;margin:auto;
+  box-shadow:0 12px 44px rgba(0,0,0,.3);border:1px solid var(--line)}
+.modal header{background:none;border:0;border-bottom:1px solid var(--line);position:static;
+  padding:16px 20px;display:flex;align-items:center;gap:10px}
+.modal header h3{flex:1;font-size:16px}
+.modal .body{padding:18px 20px;max-height:65vh;overflow-y:auto}
+.modal .foot{padding:14px 20px;border-top:1px solid var(--line);display:flex;gap:9px;justify-content:flex-end;flex-wrap:wrap}
+.modal .foot .sp{flex:1}
+
+/* Avisos */
+.aviso{border-radius:10px;padding:12px 14px;font-size:13.5px;margin-bottom:11px;border:1px solid transparent;line-height:1.5}
+.aviso.rojo{background:var(--bad-soft);border-color:var(--bad);color:var(--tx)}
+.aviso.ambar{background:var(--warn-soft);border-color:var(--warn);color:var(--tx)}
+.aviso.verde{background:var(--ok-soft);border-color:var(--ok);color:var(--tx)}
+.aviso.azul{background:var(--acc-soft);border-color:var(--acc);color:var(--tx)}
+.aviso b{font-weight:680}
+.vacio{text-align:center;padding:34px 20px;color:var(--tx-3);font-size:14px}
+.vacio p{margin:0 0 14px}
+
+/* Barras de análisis */
+.split{display:flex;height:26px;border-radius:7px;overflow:hidden;background:var(--panel-2);border:1px solid var(--line)}
+.split i{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff}
+.leg{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--tx-2);margin-top:9px}
+.leg b{color:var(--tx)}
+.mini{height:7px;background:var(--panel-2);border-radius:4px;overflow:hidden}
+.mini i{display:block;height:100%;border-radius:4px}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--tx);color:var(--bg);
+  padding:11px 20px;border-radius:9px;font-size:14px;font-weight:550;z-index:200;box-shadow:0 6px 22px rgba(0,0,0,.28);
+  opacity:0;pointer-events:none;transition:opacity .18s;max-width:88vw;text-align:center}
+.toast.on{opacity:1}
+.hide{display:none!important}
+code{font-family:var(--mono);font-size:12.5px;background:var(--panel-2);padding:1px 5px;border-radius:4px;border:1px solid var(--line)}
+pre{font-family:var(--mono);font-size:12px;background:var(--panel-2);padding:12px;border-radius:8px;
+  border:1px solid var(--line);overflow-x:auto;line-height:1.45}
+@media(max-width:640px){
+  .kpi .val{font-size:20px}
+  .card{padding:14px}
+  .tw{margin:0 -14px;padding:0 14px}
+  /* En pantalla chica la tabla se desliza a lo ancho en vez de apilar cada
+     fila en tres renglones: se lee mucho mejor de un vistazo. */
+  .tw td,.tw th{white-space:nowrap}
+  .tw td .sub{white-space:nowrap}
+  .filtros .field{min-width:120px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hd">
+    <div class="brand"><span>💳</span> Control de Tarjetas</div>
+    <div class="sp"></div>
+    <nav id="nav">
+      <button data-t="resumen" class="on">Resumen</button>
+      <button data-t="tarjetas">Tarjetas</button>
+      <button data-t="movs">Movimientos</button>
+      <button data-t="cortes">Estados de cuenta</button>
+      <button data-t="ingresos">Ingresos</button>
+      <button data-t="analisis">¿Por qué no baja?</button>
+      <button data-t="datos">Datos</button>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap">
+  <section id="tab-resumen"></section>
+  <section id="tab-tarjetas" class="hide"></section>
+  <section id="tab-movs" class="hide"></section>
+  <section id="tab-cortes" class="hide"></section>
+  <section id="tab-ingresos" class="hide"></section>
+  <section id="tab-analisis" class="hide"></section>
+  <section id="tab-datos" class="hide"></section>
+</div>
+
+<div class="ov" id="ov">
+  <div class="modal">
+    <header><h3 id="mTitulo">Título</h3><button class="ico" onclick="cerrarModal()">✕</button></header>
+    <div class="body" id="mBody"></div>
+    <div class="foot" id="mFoot"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ==========================================================================
+   CONTROL DE TARJETAS DE CRÉDITO — app de un solo archivo, sin dependencias.
+   Los datos viven en localStorage y se respaldan a un archivo JSON.
+   ========================================================================== */
+
+const LLAVE = 'tarjetas-credito-v1';
+const IVA = 0.16;                 // IVA sobre intereses y comisiones (México)
+const COLORES = ['#1f4e8c','#7a1f3d','#1f6b4a','#5b3a8c','#8c5a1f','#0f5f6b','#6b1f1f','#2d3748'];
+
+/* Tipos de movimiento. suma = cómo afecta la deuda de la tarjeta.
+   +1 aumenta lo que debes, -1 lo disminuye. */
+const TIPOS = {
+  compra:      {etiqueta:'Compra',              suma:+1, clase:'gris'},
+  disposicion: {etiqueta:'Disposición efectivo', suma:+1, clase:'ambar'},
+  interes:     {etiqueta:'Intereses',            suma:+1, clase:'rojo'},
+  iva:         {etiqueta:'IVA de intereses',     suma:+1, clase:'rojo'},
+  comision:    {etiqueta:'Comisión',             suma:+1, clase:'rojo'},
+  anualidad:   {etiqueta:'Anualidad',            suma:+1, clase:'rojo'},
+  abono:       {etiqueta:'Abono / Pago',         suma:-1, clase:'verde'},
+  bonificacion:{etiqueta:'Bonificación',         suma:-1, clase:'verde'},
+};
+/* Lo que el banco te cobra por deber dinero: esto es lo que hace que no baje la deuda. */
+const TIPOS_COSTO = ['interes','iva','comision','anualidad'];
+const CATEGORIAS = ['Súper','Comida','Gasolina','Transporte','Servicios','Suscripciones',
+  'Salud','Ropa','Hogar','Entretenimiento','Educación','Negocio','Viajes','Efectivo','Otros'];
+
+let D = cargar();       // estado completo
+let tabActual = 'resumen';
+
+/* ---------- Persistencia ---------- */
+function estadoVacio(){
+  return {version:1, tarjetas:[], movimientos:[], periodos:[], ingresos:[],
+          creado:hoyISO(), actualizado:hoyISO()};
+}
+function cargar(){
+  try{
+    const raw = localStorage.getItem(LLAVE);
+    if(!raw) return estadoVacio();
+    const d = JSON.parse(raw);
+    return Object.assign(estadoVacio(), d);
+  }catch(e){
+    console.error('No se pudo leer el almacenamiento:', e);
+    return estadoVacio();
+  }
+}
+function guardar(){
+  D.actualizado = hoyISO();
+  try{ localStorage.setItem(LLAVE, JSON.stringify(D)); }
+  catch(e){ aviso('⚠️ No se pudo guardar. Exporta tu respaldo JSON.'); }
+}
+
+/* ---------- Utilidades ---------- */
+const uid = () => Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4);
+const num = v => { const n = parseFloat(String(v ?? '').replace(/[^0-9.-]/g,'')); return isNaN(n)?0:n; };
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const $ = id => document.getElementById(id);
+
+/* Formatea un monto. Los negativos se muestran con signo: si tu deuda subió
+   en vez de bajar, el número tiene que decirlo. */
+function money(n){
+  const v = num(n);
+  const s = '$' + Math.abs(v).toLocaleString('es-MX',{minimumFractionDigits:2, maximumFractionDigits:2});
+  return v < 0 ? '−' + s : s;
+}
+/* Cuántos meses distintos traen cargos de intereses o comisiones. */
+function mesesConCosto(){
+  const m = new Set(D.movimientos.filter(x => TIPOS_COSTO.includes(x.tipo))
+    .map(x => (x.fecha||'').slice(0,7)).filter(Boolean));
+  return m.size || 1;
+}
+function pct(n){ return (num(n)*100).toFixed(1).replace(/\.0$/,'') + '%'; }
+
+function hoyISO(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+/* Fechas siempre en horario local para que no se recorra un día. */
+function aFecha(iso){
+  if(!iso) return null;
+  const [a,m,d] = String(iso).slice(0,10).split('-').map(Number);
+  if(!a || !m || !d) return null;
+  return new Date(a, m-1, d);
+}
+function aISO(f){
+  if(!f) return '';
+  return `${f.getFullYear()}-${String(f.getMonth()+1).padStart(2,'0')}-${String(f.getDate()).padStart(2,'0')}`;
+}
+function fechaCorta(iso){
+  const f = aFecha(iso); if(!f) return '—';
+  const M = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  return `${f.getDate()} ${M[f.getMonth()]} ${String(f.getFullYear()).slice(2)}`;
+}
+function mesLargo(ym){
+  const M = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const [a,m] = ym.split('-').map(Number);
+  return `${M[m-1]} ${a}`;
+}
+function diasEntre(isoA, isoB){
+  const a = aFecha(isoA), b = aFecha(isoB);
+  if(!a || !b) return null;
+  return Math.round((b - a) / 86400000);
+}
+function sumaDias(iso, n){
+  const f = aFecha(iso); if(!f) return '';
+  f.setDate(f.getDate() + n);
+  return aISO(f);
+}
+/* Día del mes ajustado: si pides el 31 en febrero te da el último día real. */
+function diaDelMes(anio, mes, dia){
+  const ultimo = new Date(anio, mes+1, 0).getDate();
+  return new Date(anio, mes, Math.min(dia, ultimo));
+}
+function aviso(txt, ms){
+  const t = $('toast'); t.textContent = txt; t.classList.add('on');
+  clearTimeout(t._id); t._id = setTimeout(()=>t.classList.remove('on'), ms || 2600);
+}
+
+/* ---------- Consultas sobre el estado ---------- */
+const tarjeta   = id => D.tarjetas.find(t => t.id === id);
+const nomTarjeta= id => (tarjeta(id) || {}).nombre || 'Tarjeta borrada';
+const colTarjeta= id => (tarjeta(id) || {}).color || '#888';
+
+function movsDe(tarjetaId){
+  return D.movimientos.filter(m => m.tarjetaId === tarjetaId);
+}
+function ordenados(lista){
+  return [...lista].sort((a,b) => (b.fecha||'').localeCompare(a.fecha||'') || (b.creado||'').localeCompare(a.creado||''));
+}
+/* Efecto de un movimiento sobre la deuda (positivo sube, negativo baja). */
+function efecto(m){
+  const t = TIPOS[m.tipo] || TIPOS.compra;
+  return t.suma * Math.abs(num(m.monto));
+}
+
+/* Saldo actual de una tarjeta.
+   Si hay un estado de cuenta cargado, partimos de su saldo final (que es la
+   verdad del banco) y sumamos sólo lo que pasó después. Así el saldo no se
+   deforma por movimientos capturados a medias antes de ese corte. */
+function saldoTarjeta(id){
+  const cortes = periodosDe(id);
+  const ultimo = cortes[0];  // el más reciente
+  if(ultimo){
+    const posteriores = movsDe(id).filter(m => (m.fecha||'') > ultimo.fechaCorte);
+    return num(ultimo.saldoNuevo) + posteriores.reduce((s,m) => s + efecto(m), 0);
+  }
+  return movsDe(id).reduce((s,m) => s + efecto(m), 0);
+}
+function periodosDe(id){
+  return D.periodos.filter(p => p.tarjetaId === id)
+    .sort((a,b) => (b.fechaCorte||'').localeCompare(a.fechaCorte||''));
+}
+/* Movimientos que caen dentro de un periodo: desde el día después del corte
+   anterior hasta el corte de este periodo. */
+function movsDelPeriodo(p){
+  const previos = periodosDe(p.tarjetaId).filter(x => (x.fechaCorte||'') < (p.fechaCorte||''));
+  const desde = previos.length ? sumaDias(previos[0].fechaCorte, 1) : '0000-01-01';
+  return movsDe(p.tarjetaId).filter(m => (m.fecha||'') >= desde && (m.fecha||'') <= (p.fechaCorte||''));
+}
+/* Abonos hechos en la ventana de pago: entre el corte y la fecha límite. */
+function abonosDelPeriodo(p){
+  return movsDe(p.tarjetaId).filter(m =>
+    (TIPOS[m.tipo]||{}).suma === -1 &&
+    (m.fecha||'') > (p.fechaCorte||'') &&
+    (m.fecha||'') <= (p.fechaLimitePago || sumaDias(p.fechaCorte, 20)));
+}
+
+/* Conciliación: ¿el saldo que te cobra el banco cuadra con los movimientos?
+   saldo anterior + cargos - abonos debería ser igual al saldo nuevo. */
+function conciliar(p){
+  const movs = movsDelPeriodo(p);
+  const cargos = movs.filter(m => (TIPOS[m.tipo]||{}).suma === +1).reduce((s,m)=>s+Math.abs(num(m.monto)),0);
+  const abonos = movs.filter(m => (TIPOS[m.tipo]||{}).suma === -1).reduce((s,m)=>s+Math.abs(num(m.monto)),0);
+  const costos = movs.filter(m => TIPOS_COSTO.includes(m.tipo)).reduce((s,m)=>s+Math.abs(num(m.monto)),0);
+  const esperado = num(p.saldoAnterior) + cargos - abonos;
+  const dif = num(p.saldoNuevo) - esperado;
+  return {movs, cargos, abonos, costos, esperado, dif, cuadra: Math.abs(dif) < 1};
+}
+
+/* Estado del pago de un corte: ¿alcanzó para no generar intereses? */
+function estadoPago(p){
+  const pagado = abonosDelPeriodo(p).reduce((s,m)=>s+Math.abs(num(m.monto)),0);
+  const noInt = num(p.pagoNoIntereses) || num(p.saldoNuevo);
+  const min = num(p.pagoMinimo);
+  const venceEn = diasEntre(hoyISO(), p.fechaLimitePago);
+  let clave, etiqueta, clase;
+  if(pagado <= 0){
+    clave = venceEn !== null && venceEn < 0 ? 'vencido' : 'pendiente';
+    etiqueta = clave === 'vencido' ? 'Sin pagar · vencido' : 'Sin pagar';
+    clase = clave === 'vencido' ? 'rojo' : 'ambar';
+  }else if(pagado + 0.99 >= noInt){
+    clave='total'; etiqueta='Pagado total · sin intereses'; clase='verde';
+  }else if(min > 0 && pagado + 0.99 >= min){
+    clave='minimo'; etiqueta='Sólo el mínimo · genera intereses'; clase='ambar';
+  }else{
+    clave='parcial'; etiqueta='Pago parcial · genera intereses'; clase='rojo';
+  }
+  return {pagado, noInt, min, faltante: Math.max(0, noInt - pagado), venceEn, clave, etiqueta, clase};
+}
+
+/* Próximo corte y próxima fecha de pago según la configuración de la tarjeta. */
+function proximasFechas(t){
+  if(!t.diaCorte) return null;
+  const hoy = aFecha(hoyISO());
+  let corte = diaDelMes(hoy.getFullYear(), hoy.getMonth(), t.diaCorte);
+  if(corte < hoy) corte = diaDelMes(hoy.getFullYear(), hoy.getMonth()+1, t.diaCorte);
+  const dias = num(t.diasParaPagar) || 20;
+  return {corte: aISO(corte), pago: sumaDias(aISO(corte), dias),
+          faltanCorte: diasEntre(hoyISO(), aISO(corte)),
+          faltanPago: diasEntre(hoyISO(), sumaDias(aISO(corte), dias))};
+}
+/* Interés estimado del próximo mes si no liquidas el saldo. */
+function interesEstimado(t, saldo){
+  const tasa = num(t.tasaAnual)/100/12;
+  if(tasa <= 0 || saldo <= 0) return 0;
+  return saldo * tasa * (1 + IVA);
+}
+</script>
+
+<script>
+/* ==========================================================================
+   Navegación y ventanas modales
+   ========================================================================== */
+const TABS = ['resumen','tarjetas','movs','cortes','ingresos','analisis','datos'];
+
+function ir(t){
+  tabActual = t;
+  TABS.forEach(x => $('tab-'+x).classList.toggle('hide', x !== t));
+  [...$('nav').children].forEach(b => b.classList.toggle('on', b.dataset.t === t));
+  render();
+  window.scrollTo({top:0});
+}
+$('nav').addEventListener('click', e => {
+  const b = e.target.closest('button[data-t]');
+  if(b) ir(b.dataset.t);
+});
+
+let accionesModal = {};
+function modal(titulo, html, botones){
+  $('mTitulo').textContent = titulo;
+  $('mBody').innerHTML = html;
+  accionesModal = {};
+  $('mFoot').innerHTML = (botones||[]).map((b,i) => {
+    accionesModal['b'+i] = b.accion;
+    return b.espacio ? '<div class="sp"></div>' :
+      `<button class="btn ${b.clase||'ghost'}" data-a="b${i}">${esc(b.texto)}</button>`;
+  }).join('');
+  $('ov').classList.add('on');
+  const primero = $('mBody').querySelector('input,select,textarea');
+  if(primero) setTimeout(()=>primero.focus(), 60);
+}
+function cerrarModal(){ $('ov').classList.remove('on'); }
+$('mFoot').addEventListener('click', e => {
+  const b = e.target.closest('button[data-a]');
+  if(b && accionesModal[b.dataset.a]) accionesModal[b.dataset.a]();
+});
+$('ov').addEventListener('click', e => { if(e.target === $('ov')) cerrarModal(); });
+document.addEventListener('keydown', e => { if(e.key === 'Escape') cerrarModal(); });
+
+function confirmar(titulo, texto, alConfirmar){
+  modal(titulo, `<p style="margin:0;line-height:1.6">${texto}</p>`, [
+    {texto:'Cancelar', accion: cerrarModal},
+    {texto:'Sí, continuar', clase:'danger', accion: () => { cerrarModal(); alConfirmar(); }},
+  ]);
+}
+/* Lee los campos [name] del modal en un objeto. */
+function leerForm(){
+  const o = {};
+  $('mBody').querySelectorAll('[name]').forEach(el => {
+    o[el.name] = el.type === 'checkbox' ? el.checked : el.value.trim();
+  });
+  return o;
+}
+function opciones(lista, sel, vacio){
+  const arr = vacio ? [{v:'', t:vacio}] : [];
+  lista.forEach(x => arr.push(typeof x === 'string' ? {v:x, t:x} : x));
+  return arr.map(o => `<option value="${esc(o.v)}"${o.v===sel?' selected':''}>${esc(o.t)}</option>`).join('');
+}
+const selTarjetas = (sel, vacio) =>
+  opciones(D.tarjetas.map(t => ({v:t.id, t:t.nombre})), sel, vacio);
+
+function render(){
+  const f = {resumen:vResumen, tarjetas:vTarjetas, movs:vMovs, cortes:vCortes,
+             ingresos:vIngresos, analisis:vAnalisis, datos:vDatos}[tabActual];
+  if(f) $('tab-'+tabActual).innerHTML = f();
+}
+function refrescar(){ guardar(); render(); }
+
+/* ==========================================================================
+   Bloques reutilizables
+   ========================================================================== */
+function kpi(lbl, val, hint, clase){
+  return `<div class="kpi ${clase||''}"><div class="lbl">${esc(lbl)}</div>
+    <div class="val">${val}</div>${hint?`<div class="hint">${hint}</div>`:''}</div>`;
+}
+function vacioMsg(texto, boton){
+  return `<div class="vacio"><p>${texto}</p>${boton||''}</div>`;
+}
+function pintaTarjeta(t, conAcciones){
+  const saldo = saldoTarjeta(t.id);
+  const lim = num(t.limite);
+  const uso = lim > 0 ? Math.min(1, saldo/lim) : 0;
+  const fechas = proximasFechas(t);
+  return `<div class="cc" style="background:linear-gradient(135deg, ${t.color} 0%, ${sombrear(t.color,-22)} 100%)">
+    ${conAcciones ? `<div class="cc-acts">
+      <button onclick="formTarjeta('${t.id}')" title="Editar">✎</button>
+      <button onclick="borrarTarjeta('${t.id}')" title="Eliminar">🗑</button></div>` : ''}
+    <div class="cc-top"><div>
+      <div class="cc-bank">${esc(t.banco||'')}</div>
+      <div class="cc-name">${esc(t.nombre)}</div>
+      ${t.ultimos4 ? `<div class="cc-num">•••• ${esc(t.ultimos4)}</div>` : ''}
+    </div></div>
+    <div class="cc-saldo">
+      <div class="l">Debes hoy</div>
+      <div class="v">${money(saldo)}</div>
+      ${lim > 0 ? `<div class="bar"><i style="width:${(uso*100).toFixed(1)}%"></i></div>
+        <div class="cc-meta"><span>Límite ${money(lim)}</span><span>Usado ${pct(uso)}</span>
+        <span>Disponible ${money(Math.max(0, lim - saldo))}</span></div>` : ''}
+      ${fechas ? `<div class="cc-meta"><span>Corte ${fechaCorta(fechas.corte)}</span>
+        <span>Pago ${fechaCorta(fechas.pago)}</span>
+        ${t.tasaAnual ? `<span>${num(t.tasaAnual)}% anual</span>` : ''}</div>` : ''}
+    </div></div>`;
+}
+/* Oscurece o aclara un color hex para el degradado de la tarjeta. */
+function sombrear(hex, p){
+  const h = String(hex||'#888').replace('#','');
+  const v = h.length === 3 ? h.split('').map(c=>c+c).join('') : h;
+  const n = parseInt(v, 16);
+  const cl = x => Math.max(0, Math.min(255, x));
+  const r = cl((n>>16) + p), g = cl(((n>>8)&255) + p), b = cl((n&255) + p);
+  return '#' + ((r<<16)|(g<<8)|b).toString(16).padStart(6,'0');
+}
+</script>
+
+<script>
+/* ==========================================================================
+   VISTA: Resumen
+   ========================================================================== */
+function vResumen(){
+  if(!D.tarjetas.length){
+    return `<div class="card">
+      <h2>Empecemos por ordenar el desmadre</h2>
+      <p class="sub" style="margin:0 0 16px;max-width:640px">Da de alta tus tarjetas una por una con su
+      límite, día de corte, días para pagar y tasa de interés. Después cargas los estados de cuenta y
+      capturas los abonos: aquí vas a ver, corte por corte, cuánto de lo que pagas se va a intereses
+      y cuánto realmente baja tu deuda.</p>
+      <button class="btn" onclick="formTarjeta()">+ Agregar mi primera tarjeta</button></div>`;
+  }
+  const deuda = D.tarjetas.reduce((s,t) => s + saldoTarjeta(t.id), 0);
+  const limite = D.tarjetas.reduce((s,t) => s + num(t.limite), 0);
+  const mes = hoyISO().slice(0,7);
+  const delMes = D.movimientos.filter(m => (m.fecha||'').startsWith(mes));
+  const gastoMes = delMes.filter(m => ['compra','disposicion'].includes(m.tipo))
+    .reduce((s,m)=>s+Math.abs(num(m.monto)),0);
+  const abonoMes = delMes.filter(m => (TIPOS[m.tipo]||{}).suma === -1)
+    .reduce((s,m)=>s+Math.abs(num(m.monto)),0);
+  const costoMes = delMes.filter(m => TIPOS_COSTO.includes(m.tipo))
+    .reduce((s,m)=>s+Math.abs(num(m.monto)),0);
+  const ingresoMes = D.ingresos.filter(i => (i.fecha||'').startsWith(mes))
+    .reduce((s,i)=>s+num(i.monto),0);
+
+  /* Avisos: cortes que ya vencieron o están por vencer sin pago suficiente. */
+  const avisos = [];
+  D.periodos.forEach(p => {
+    const e = estadoPago(p);
+    if(e.venceEn === null) return;
+    if(e.clave === 'total') return;
+    if(e.venceEn < 0 && e.venceEn > -60 && e.pagado <= 0){
+      avisos.push(`<div class="aviso rojo">🔴 <b>${esc(nomTarjeta(p.tarjetaId))}</b> — el pago del corte del
+        ${fechaCorta(p.fechaCorte)} venció el ${fechaCorta(p.fechaLimitePago)} y no tienes abonos registrados.
+        Debías ${money(p.pagoNoIntereses||p.saldoNuevo)}.</div>`);
+    }else if(e.venceEn >= 0 && e.venceEn <= 12){
+      avisos.push(`<div class="aviso ${e.venceEn<=3?'rojo':'ambar'}">${e.venceEn<=3?'🔴':'🟡'}
+        <b>${esc(nomTarjeta(p.tarjetaId))}</b> — vence en <b>${e.venceEn} día${e.venceEn===1?'':'s'}</b>
+        (${fechaCorta(p.fechaLimitePago)}). Para no generar intereses te faltan
+        <b>${money(e.faltante)}</b> de ${money(e.noInt)}.</div>`);
+    }
+  });
+  /* Cortes por venir según la configuración de cada tarjeta. */
+  const agenda = D.tarjetas.map(t => ({t, f: proximasFechas(t)})).filter(x => x.f)
+    .sort((a,b) => a.f.corte.localeCompare(b.f.corte));
+
+  const ultimos = ordenados(D.movimientos).slice(0,12);
+
+  return `
+  <div class="grid g4" style="margin-bottom:16px">
+    ${kpi('Deuda total', money(deuda), limite>0 ? `de ${money(limite)} de límite · ${pct(limite?deuda/limite:0)} usado` : '', deuda>0?'bad':'ok')}
+    ${kpi('Gastado este mes', money(gastoMes), `${mesLargo(mes)}`)}
+    ${kpi('Abonado este mes', money(abonoMes), abonoMes>0 && costoMes>0 ? `${pct(costoMes/abonoMes)} se fue a intereses` : 'pagos y bonificaciones', 'ok')}
+    ${kpi('Costo del banco este mes', money(costoMes), 'intereses, IVA, comisiones y anualidades', costoMes>0?'bad':'')}
+  </div>
+
+  ${avisos.length ? `<div class="card"><h2>⚠️ Atención</h2>${avisos.join('')}</div>` : ''}
+
+  ${ingresoMes>0 ? `<div class="card"><h2>Tu mes en números <span class="sub">${mesLargo(mes)}</span></h2>
+    <div class="grid g3">
+      ${kpi('Ingresos', money(ingresoMes))}
+      ${kpi('Gasto con tarjeta', money(gastoMes), ingresoMes?`${pct(gastoMes/ingresoMes)} de tu ingreso`:'')}
+      ${kpi('Abonos a tarjetas', money(abonoMes), ingresoMes?`${pct(abonoMes/ingresoMes)} de tu ingreso`:'')}
+    </div>
+    ${gastoMes+abonoMes > ingresoMes ? `<div class="aviso ambar" style="margin:14px 0 0">🟡 Este mes
+      gastaste y abonaste <b>${money(gastoMes+abonoMes)}</b> contra <b>${money(ingresoMes)}</b> de ingresos.
+      Así la deuda crece aunque estés pagando.</div>` : ''}
+  </div>` : ''}
+
+  <div class="card"><h2>Mis tarjetas <span class="sp"></span>
+    <button class="btn sm" onclick="formTarjeta()">+ Tarjeta</button>
+    <button class="btn sm ghost" onclick="formMovimiento()">+ Movimiento</button></h2>
+    <div class="grid g2">${D.tarjetas.map(t => pintaTarjeta(t, false)).join('')}</div>
+  </div>
+
+  ${agenda.length ? `<div class="card"><h2>Calendario de cortes y pagos</h2>
+    <div class="tw"><table>
+      <thead><tr><th>Tarjeta</th><th>Próximo corte</th><th>Fecha límite de pago</th>
+        <th class="num">Debes hoy</th><th class="num">Interés si no liquidas</th></tr></thead>
+      <tbody>${agenda.map(({t,f}) => {
+        const s = saldoTarjeta(t.id);
+        return `<tr>
+          <td><span class="dot" style="background:${t.color}"></span>${esc(t.nombre)}</td>
+          <td>${fechaCorta(f.corte)} <span class="sub">en ${f.faltanCorte}d</span></td>
+          <td>${fechaCorta(f.pago)} <span class="sub">en ${f.faltanPago}d</span></td>
+          <td class="num">${money(s)}</td>
+          <td class="num ${interesEstimado(t,s)>0?'neg':''}">${t.tasaAnual? money(interesEstimado(t,s)) : '—'}</td>
+        </tr>`;}).join('')}</tbody></table></div>
+    <p class="sub" style="margin:12px 0 0">El interés estimado usa tu tasa anual entre 12 más el ${pct(IVA)} de IVA.
+    Es lo que te van a cobrar el próximo corte si no liquidas el saldo completo.</p>
+  </div>` : ''}
+
+  ${ultimos.length ? `<div class="card"><h2>Últimos movimientos <span class="sp"></span>
+    <button class="btn sm ghost" onclick="ir('movs')">Ver todos</button></h2>
+    <div class="tw"><table>
+      <thead><tr><th>Fecha</th><th>Concepto</th><th>Tarjeta</th><th>Tipo</th><th class="num">Monto</th></tr></thead>
+      <tbody>${ultimos.map(filaMov).join('')}</tbody></table></div>
+  </div>` : ''}`;
+}
+
+/* ==========================================================================
+   VISTA: Tarjetas
+   ========================================================================== */
+function vTarjetas(){
+  if(!D.tarjetas.length)
+    return `<div class="card">${vacioMsg('Todavía no tienes tarjetas registradas.',
+      '<button class="btn" onclick="formTarjeta()">+ Agregar tarjeta</button>')}</div>`;
+
+  return `<div class="card"><h2>Mis tarjetas <span class="sp"></span>
+    <button class="btn sm" onclick="formTarjeta()">+ Tarjeta</button></h2>
+    <div class="grid g2">${D.tarjetas.map(t => pintaTarjeta(t, true)).join('')}</div></div>
+  ${D.tarjetas.map(fichaTarjeta).join('')}`;
+}
+function fichaTarjeta(t){
+  const saldo = saldoTarjeta(t.id);
+  const movs = movsDe(t.id);
+  const cortes = periodosDe(t.id);
+  const costo = movs.filter(m => TIPOS_COSTO.includes(m.tipo)).reduce((s,m)=>s+Math.abs(num(m.monto)),0);
+  const abonado = movs.filter(m => (TIPOS[m.tipo]||{}).suma === -1).reduce((s,m)=>s+Math.abs(num(m.monto)),0);
+  const f = proximasFechas(t);
+  return `<div class="card">
+    <h2><span class="dot" style="background:${t.color}"></span>${esc(t.nombre)}
+      <span class="sub">${esc(t.banco||'')}</span><span class="sp"></span>
+      <button class="btn sm ghost" onclick="formMovimiento(null,'${t.id}')">+ Movimiento</button>
+      <button class="btn sm ghost" onclick="formPeriodo(null,'${t.id}')">+ Estado de cuenta</button>
+      <button class="btn sm ghost" onclick="formTarjeta('${t.id}')">Editar</button></h2>
+    <div class="grid g4">
+      ${kpi('Debes hoy', money(saldo), '', saldo>0?'bad':'ok')}
+      ${kpi('Total abonado', money(abonado), `${movs.filter(m=>(TIPOS[m.tipo]||{}).suma===-1).length} abonos`, 'ok')}
+      ${kpi('Te ha costado', money(costo), 'intereses + IVA + comisiones', costo>0?'bad':'')}
+      ${kpi('Estados de cuenta', String(cortes.length), cortes.length?`último ${fechaCorta(cortes[0].fechaCorte)}`:'ninguno cargado')}
+    </div>
+    <div class="grid g4" style="margin-top:14px">
+      ${kpi('Límite', t.limite?money(t.limite):'—')}
+      ${kpi('Tasa anual', t.tasaAnual?num(t.tasaAnual)+'%':'—', t.tasaAnual?`${(num(t.tasaAnual)/12).toFixed(2)}% al mes + IVA`:'')}
+      ${kpi('Día de corte', t.diaCorte?String(t.diaCorte):'—', f?`próximo ${fechaCorta(f.corte)}`:'')}
+      ${kpi('Días para pagar', t.diasParaPagar?String(t.diasParaPagar):'—', f?`próximo pago ${fechaCorta(f.pago)}`:'')}
+    </div>
+    ${abonado > 0 && costo > 0 ? `<div style="margin-top:16px">
+      <div class="sub" style="margin-bottom:7px">De todo lo que has abonado a esta tarjeta:</div>
+      <div class="split">
+        <i style="width:${Math.min(100,costo/abonado*100).toFixed(1)}%;background:var(--bad)">${costo/abonado>.12?pct(Math.min(1,costo/abonado)):''}</i>
+        <i style="width:${Math.max(0,(1-costo/abonado)*100).toFixed(1)}%;background:var(--ok)">${1-costo/abonado>.12?pct(1-costo/abonado):''}</i>
+      </div>
+      <div class="leg"><span>🔴 Se fue al banco: <b>${money(costo)}</b></span>
+        <span>🟢 Bajó tu deuda: <b>${money(Math.max(0,abonado-costo))}</b></span></div>
+    </div>` : ''}
+    ${t.nota ? `<p class="sub" style="margin:14px 0 0">${esc(t.nota)}</p>` : ''}
+  </div>`;
+}
+
+function formTarjeta(id){
+  const t = id ? tarjeta(id) : {};
+  const color = t.color || COLORES[D.tarjetas.length % COLORES.length];
+  modal(id ? 'Editar tarjeta' : 'Nueva tarjeta', `
+    <div class="fgrid">
+      <div class="field"><label>Nombre de la tarjeta *</label>
+        <input name="nombre" value="${esc(t.nombre||'')}" placeholder="Ej. BBVA Azul"></div>
+      <div class="field"><label>Banco</label>
+        <input name="banco" value="${esc(t.banco||'')}" placeholder="Ej. BBVA"></div>
+    </div>
+    <div class="fgrid">
+      <div class="field"><label>Últimos 4 dígitos</label>
+        <input name="ultimos4" value="${esc(t.ultimos4||'')}" maxlength="4" inputmode="numeric" placeholder="1234"></div>
+      <div class="field"><label>Límite de crédito</label>
+        <input name="limite" value="${t.limite||''}" inputmode="decimal" placeholder="30000"></div>
+      <div class="field"><label>Tasa de interés anual %</label>
+        <input name="tasaAnual" value="${t.tasaAnual||''}" inputmode="decimal" placeholder="60"></div>
+    </div>
+    <div class="fgrid">
+      <div class="field"><label>Día de corte (1-31)</label>
+        <input name="diaCorte" value="${t.diaCorte||''}" inputmode="numeric" placeholder="15"></div>
+      <div class="field"><label>Días para pagar tras el corte</label>
+        <input name="diasParaPagar" value="${t.diasParaPagar||20}" inputmode="numeric" placeholder="20"></div>
+      <div class="field"><label>Anualidad</label>
+        <input name="anualidad" value="${t.anualidad||''}" inputmode="decimal" placeholder="0"></div>
+    </div>
+    <div class="field"><label>Color</label>
+      <div style="display:flex;gap:7px;flex-wrap:wrap" id="colores">
+        ${COLORES.map(c => `<button type="button" data-c="${c}" style="width:34px;height:34px;border-radius:8px;
+          background:${c};border:3px solid ${c===color?'var(--acc)':'transparent'};cursor:pointer"></button>`).join('')}
+      </div><input type="hidden" name="color" value="${color}"></div>
+    <div class="field"><label>Notas</label>
+      <textarea name="nota" placeholder="Promociones, meses sin intereses vigentes, lo que quieras recordar...">${esc(t.nota||'')}</textarea></div>
+    <p class="sub" style="margin:0">La tasa anual y el día de corte se usan para estimar intereses y avisarte
+    antes de que venza el pago. Vienen impresos en tu estado de cuenta.</p>
+  `, [
+    ...(id ? [{texto:'Eliminar', clase:'danger', accion:()=>{cerrarModal(); borrarTarjeta(id);}}] : []),
+    {espacio:true},
+    {texto:'Cancelar', accion:cerrarModal},
+    {texto:'Guardar', clase:'', accion:()=>{
+      const v = leerForm();
+      if(!v.nombre) return aviso('Ponle un nombre a la tarjeta');
+      const obj = {nombre:v.nombre, banco:v.banco, ultimos4:v.ultimos4, color:v.color,
+        limite:num(v.limite), tasaAnual:num(v.tasaAnual), diaCorte:num(v.diaCorte),
+        diasParaPagar:num(v.diasParaPagar)||20, anualidad:num(v.anualidad), nota:v.nota};
+      if(id) Object.assign(tarjeta(id), obj);
+      else D.tarjetas.push(Object.assign({id:uid(), creado:hoyISO()}, obj));
+      cerrarModal(); refrescar(); aviso(id?'Tarjeta actualizada':'Tarjeta agregada ✓');
+    }},
+  ]);
+  $('colores').addEventListener('click', e => {
+    const b = e.target.closest('button[data-c]'); if(!b) return;
+    $('mBody').querySelector('[name=color]').value = b.dataset.c;
+    [...$('colores').children].forEach(x => x.style.borderColor = x === b ? 'var(--acc)' : 'transparent');
+  });
+}
+function borrarTarjeta(id){
+  const t = tarjeta(id);
+  const nm = movsDe(id).length, np = periodosDe(id).length;
+  confirmar('Eliminar tarjeta',
+    `Vas a eliminar <b>${esc(t.nombre)}</b> junto con <b>${nm} movimiento(s)</b> y
+     <b>${np} estado(s) de cuenta</b>. Esto no se puede deshacer.`,
+    () => {
+      D.tarjetas = D.tarjetas.filter(x => x.id !== id);
+      D.movimientos = D.movimientos.filter(x => x.tarjetaId !== id);
+      D.periodos = D.periodos.filter(x => x.tarjetaId !== id);
+      refrescar(); aviso('Tarjeta eliminada');
+    });
+}
+</script>
+
+<script>
+/* ==========================================================================
+   VISTA: Movimientos
+   ========================================================================== */
+let filtros = {tarjeta:'', tipo:'', mes:'', cat:'', texto:''};
+
+function filaMov(m){
+  const t = TIPOS[m.tipo] || TIPOS.compra;
+  const signo = t.suma > 0 ? '+' : '−';
+  return `<tr>
+    <td style="white-space:nowrap">${fechaCorta(m.fecha)}</td>
+    <td>${esc(m.descripcion||'(sin concepto)')}
+      ${m.msi ? `<span class="tag azul">${esc(m.msi)} MSI</span>` : ''}
+      ${m.categoria ? `<div class="sub">${esc(m.categoria)}</div>` : ''}</td>
+    <td><span class="dot" style="background:${colTarjeta(m.tarjetaId)}"></span>${esc(nomTarjeta(m.tarjetaId))}</td>
+    <td><span class="tag ${t.clase}">${t.etiqueta}</span></td>
+    <td class="num ${t.suma>0?'neg':'pos'}">${signo} ${money(m.monto)}</td>
+    <td style="width:1%;white-space:nowrap">
+      <button class="ico" onclick="formMovimiento('${m.id}')" title="Editar">✎</button>
+      <button class="ico" onclick="borrarMov('${m.id}')" title="Eliminar">🗑</button></td>
+  </tr>`;
+}
+function vMovs(){
+  if(!D.tarjetas.length)
+    return `<div class="card">${vacioMsg('Primero agrega una tarjeta.',
+      '<button class="btn" onclick="formTarjeta()">+ Agregar tarjeta</button>')}</div>`;
+
+  const meses = [...new Set(D.movimientos.map(m => (m.fecha||'').slice(0,7)).filter(Boolean))].sort().reverse();
+  let lista = D.movimientos.filter(m =>
+    (!filtros.tarjeta || m.tarjetaId === filtros.tarjeta) &&
+    (!filtros.tipo    || m.tipo === filtros.tipo) &&
+    (!filtros.mes     || (m.fecha||'').startsWith(filtros.mes)) &&
+    (!filtros.cat     || m.categoria === filtros.cat) &&
+    (!filtros.texto   || (m.descripcion||'').toLowerCase().includes(filtros.texto.toLowerCase())));
+  lista = ordenados(lista);
+
+  const cargos = lista.filter(m => (TIPOS[m.tipo]||{}).suma === +1).reduce((s,m)=>s+Math.abs(num(m.monto)),0);
+  const abonos = lista.filter(m => (TIPOS[m.tipo]||{}).suma === -1).reduce((s,m)=>s+Math.abs(num(m.monto)),0);
+
+  /* Gasto por categoría de lo filtrado (sólo compras y disposiciones). */
+  const porCat = {};
+  lista.filter(m => ['compra','disposicion'].includes(m.tipo))
+    .forEach(m => { const c = m.categoria || 'Sin categoría';
+      porCat[c] = (porCat[c]||0) + Math.abs(num(m.monto)); });
+  const cats = Object.entries(porCat).sort((a,b) => b[1]-a[1]);
+  const maxCat = cats.length ? cats[0][1] : 1;
+
+  return `<div class="card">
+    <h2>Movimientos <span class="sub">${lista.length} de ${D.movimientos.length}</span><span class="sp"></span>
+      <button class="btn sm" onclick="formMovimiento()">+ Movimiento</button>
+      <button class="btn sm ghost" onclick="ir('datos')">Cargar estado de cuenta</button></h2>
+    <div class="filtros">
+      <div class="field"><label>Tarjeta</label><select onchange="filtros.tarjeta=this.value;render()">
+        ${selTarjetas(filtros.tarjeta, 'Todas')}</select></div>
+      <div class="field"><label>Tipo</label><select onchange="filtros.tipo=this.value;render()">
+        ${opciones(Object.entries(TIPOS).map(([k,v])=>({v:k,t:v.etiqueta})), filtros.tipo, 'Todos')}</select></div>
+      <div class="field"><label>Mes</label><select onchange="filtros.mes=this.value;render()">
+        ${opciones(meses.map(m=>({v:m,t:mesLargo(m)})), filtros.mes, 'Todos')}</select></div>
+      <div class="field"><label>Categoría</label><select onchange="filtros.cat=this.value;render()">
+        ${opciones(CATEGORIAS, filtros.cat, 'Todas')}</select></div>
+      <div class="field" style="flex:1;min-width:170px"><label>Buscar concepto</label>
+        <input value="${esc(filtros.texto)}" placeholder="Ej. Oxxo" oninput="filtros.texto=this.value;clearTimeout(window._b);window._b=setTimeout(render,320)"></div>
+      ${Object.values(filtros).some(Boolean) ? `<button class="btn sm ghost" onclick="filtros={tarjeta:'',tipo:'',mes:'',cat:'',texto:''};render()">Limpiar</button>` : ''}
+    </div>
+    <div class="grid g3" style="margin-bottom:14px">
+      ${kpi('Cargos', money(cargos), 'lo que subió tu deuda', cargos>0?'bad':'')}
+      ${kpi('Abonos', money(abonos), 'lo que la bajó', 'ok')}
+      ${kpi('Neto', money(Math.abs(cargos-abonos)), cargos-abonos>0?'tu deuda creció':'tu deuda bajó', cargos-abonos>0?'bad':'ok')}
+    </div>
+    ${lista.length ? `<div class="tw"><table>
+      <thead><tr><th>Fecha</th><th>Concepto</th><th>Tarjeta</th><th>Tipo</th><th class="num">Monto</th><th></th></tr></thead>
+      <tbody>${lista.map(filaMov).join('')}</tbody></table></div>`
+      : vacioMsg('No hay movimientos con esos filtros.')}
+  </div>
+  ${cats.length ? `<div class="card"><h2>En qué se te fue el dinero <span class="sub">según los filtros de arriba</span></h2>
+    ${cats.map(([c,v]) => `<div style="margin-bottom:11px">
+      <div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:4px">
+        <span>${esc(c)}</span><b class="num">${money(v)}</b></div>
+      <div class="mini"><i style="width:${(v/maxCat*100).toFixed(1)}%;background:var(--acc)"></i></div>
+    </div>`).join('')}
+  </div>` : ''}`;
+}
+
+function formMovimiento(id, tarjetaPre){
+  const m = id ? D.movimientos.find(x => x.id === id) : {};
+  modal(id ? 'Editar movimiento' : 'Nuevo movimiento', `
+    <div class="fgrid">
+      <div class="field"><label>Tarjeta *</label><select name="tarjetaId">
+        ${selTarjetas(m.tarjetaId || tarjetaPre || (D.tarjetas[0]||{}).id)}</select></div>
+      <div class="field"><label>Fecha *</label>
+        <input type="date" name="fecha" value="${m.fecha || hoyISO()}"></div>
+    </div>
+    <div class="field"><label>Concepto *</label>
+      <input name="descripcion" value="${esc(m.descripcion||'')}" placeholder="Ej. Walmart, pago desde nómina, intereses del periodo"></div>
+    <div class="fgrid">
+      <div class="field"><label>Tipo *</label><select name="tipo">
+        ${opciones(Object.entries(TIPOS).map(([k,v])=>({v:k,t:v.etiqueta})), m.tipo||'compra')}</select></div>
+      <div class="field"><label>Monto *</label>
+        <input name="monto" value="${m.monto||''}" inputmode="decimal" placeholder="0.00"></div>
+    </div>
+    <div class="fgrid">
+      <div class="field"><label>Categoría</label><select name="categoria">
+        ${opciones(CATEGORIAS, m.categoria||'', 'Sin categoría')}</select></div>
+      <div class="field"><label>Meses sin intereses</label>
+        <input name="msi" value="${esc(m.msi||'')}" placeholder="Ej. 3 de 12"></div>
+    </div>
+    <div class="field"><label>Nota</label><input name="nota" value="${esc(m.nota||'')}" placeholder="Opcional"></div>
+    <p class="sub" style="margin:0">Captura el monto siempre en positivo. El tipo decide si suma o resta a tu deuda:
+    <b>Abono/Pago</b> y <b>Bonificación</b> la bajan, todo lo demás la sube.</p>
+  `, [
+    ...(id ? [{texto:'Eliminar', clase:'danger', accion:()=>{cerrarModal(); borrarMov(id);}}] : []),
+    {espacio:true},
+    {texto:'Cancelar', accion:cerrarModal},
+    {texto:'Guardar', clase:'', accion:()=>{
+      const v = leerForm();
+      if(!v.tarjetaId) return aviso('Elige la tarjeta');
+      if(!num(v.monto)) return aviso('Captura el monto');
+      const obj = {tarjetaId:v.tarjetaId, fecha:v.fecha||hoyISO(), descripcion:v.descripcion,
+        tipo:v.tipo, monto:Math.abs(num(v.monto)), categoria:v.categoria, msi:v.msi, nota:v.nota};
+      if(id) Object.assign(D.movimientos.find(x=>x.id===id), obj);
+      else D.movimientos.push(Object.assign({id:uid(), creado:new Date().toISOString()}, obj));
+      cerrarModal(); refrescar(); aviso(id?'Movimiento actualizado':'Movimiento agregado ✓');
+    }},
+  ]);
+}
+function borrarMov(id){
+  const m = D.movimientos.find(x => x.id === id);
+  confirmar('Eliminar movimiento',
+    `¿Eliminar <b>${esc(m.descripcion||'este movimiento')}</b> por <b>${money(m.monto)}</b>?`,
+    () => { D.movimientos = D.movimientos.filter(x => x.id !== id); refrescar(); aviso('Movimiento eliminado'); });
+}
+</script>
+
+<script>
+/* ==========================================================================
+   VISTA: Estados de cuenta (cortes)
+   Aquí se compara lo que dice el banco contra los movimientos capturados.
+   ========================================================================== */
+function vCortes(){
+  if(!D.tarjetas.length)
+    return `<div class="card">${vacioMsg('Primero agrega una tarjeta.',
+      '<button class="btn" onclick="formTarjeta()">+ Agregar tarjeta</button>')}</div>`;
+
+  const todos = [...D.periodos].sort((a,b) => (b.fechaCorte||'').localeCompare(a.fechaCorte||''));
+  if(!todos.length)
+    return `<div class="card"><h2>Estados de cuenta</h2>
+      ${vacioMsg(`Aquí capturas los datos que vienen impresos en cada estado de cuenta: saldo anterior,
+        saldo nuevo, pago mínimo, pago para no generar intereses y las fechas de corte y límite de pago.<br><br>
+        Con eso puedo <b>conciliar</b>: revisar si el saldo que te cobran cuadra con los movimientos
+        que tienes capturados. Cuando no cuadra, ahí está el cobro que no reconoces.`,
+        '<button class="btn" onclick="formPeriodo()">+ Cargar estado de cuenta</button>')}</div>`;
+
+  return `<div class="card"><h2>Estados de cuenta <span class="sub">${todos.length} cargados</span>
+    <span class="sp"></span><button class="btn sm" onclick="formPeriodo()">+ Cargar estado de cuenta</button></h2>
+    <div class="tw"><table>
+      <thead><tr><th>Tarjeta</th><th>Corte</th><th>Vence</th><th class="num">Saldo del corte</th>
+        <th class="num">Pago mínimo</th><th class="num">Abonado</th><th>Estado</th><th>Cuadra</th><th></th></tr></thead>
+      <tbody>${todos.map(p => {
+        const e = estadoPago(p), c = conciliar(p);
+        return `<tr>
+          <td><span class="dot" style="background:${colTarjeta(p.tarjetaId)}"></span>${esc(nomTarjeta(p.tarjetaId))}</td>
+          <td>${fechaCorta(p.fechaCorte)}</td>
+          <td>${fechaCorta(p.fechaLimitePago)}</td>
+          <td class="num">${money(p.saldoNuevo)}</td>
+          <td class="num">${money(p.pagoMinimo)}</td>
+          <td class="num ${e.pagado>0?'pos':''}">${money(e.pagado)}</td>
+          <td><span class="tag ${e.clase}">${e.etiqueta}</span></td>
+          <td>${c.movs.length === 0 ? '<span class="tag gris">sin movs</span>'
+              : c.cuadra ? '<span class="tag verde">✓ cuadra</span>'
+              : `<span class="tag rojo">${c.dif>0?'+':''}${money(c.dif)}</span>`}</td>
+          <td style="width:1%;white-space:nowrap">
+            <button class="ico" onclick="detallePeriodo('${p.id}')" title="Ver detalle">🔍</button>
+            <button class="ico" onclick="formPeriodo('${p.id}')" title="Editar">✎</button>
+            <button class="ico" onclick="borrarPeriodo('${p.id}')" title="Eliminar">🗑</button></td>
+        </tr>`;}).join('')}</tbody></table></div>
+    <p class="sub" style="margin:12px 0 0">La columna <b>Cuadra</b> compara
+    <code>saldo anterior + cargos − abonos</code> contra el saldo que te reporta el banco.
+    Si marca una diferencia, o falta capturar un movimiento o hay un cobro que no viene desglosado.</p>
+  </div>`;
+}
+
+function detallePeriodo(id){
+  const p = D.periodos.find(x => x.id === id);
+  const t = tarjeta(p.tarjetaId) || {};
+  const c = conciliar(p), e = estadoPago(p);
+  const abonos = abonosDelPeriodo(p);
+
+  const desglose = {};
+  c.movs.forEach(m => { desglose[m.tipo] = (desglose[m.tipo]||0) + Math.abs(num(m.monto)); });
+
+  modal(`Corte del ${fechaCorta(p.fechaCorte)} · ${t.nombre||''}`, `
+    <div class="grid g3" style="margin-bottom:14px">
+      ${kpi('Saldo anterior', money(p.saldoAnterior))}
+      ${kpi('Saldo del corte', money(p.saldoNuevo))}
+      ${kpi('Abonado en la ventana', money(e.pagado), e.pagado>0?`${abonos.length} abono(s)`:'ninguno', e.pagado>0?'ok':'')}
+    </div>
+    <div class="grid g3" style="margin-bottom:16px">
+      ${kpi('Pago mínimo', money(p.pagoMinimo))}
+      ${kpi('Pago sin intereses', money(p.pagoNoIntereses||p.saldoNuevo))}
+      ${kpi('Vence', fechaCorta(p.fechaLimitePago), e.venceEn===null?'':(e.venceEn<0?`hace ${-e.venceEn} días`:`en ${e.venceEn} días`))}
+    </div>
+
+    <div class="aviso ${e.clase}"><b>${e.etiqueta}.</b>
+      ${e.clave==='total' ? ' Pagaste completo el saldo del corte: este periodo no te generó intereses. Así se hace.'
+      : e.clave==='minimo' ? ` Cubriste el mínimo (${money(e.min)}) pero te faltaron <b>${money(e.faltante)}</b>
+          para liquidar. Sobre el saldo que quedó, el banco te va a cobrar intereses${t.tasaAnual?` de aproximadamente
+          <b>${money(interesEstimado(t, num(p.saldoNuevo)-e.pagado))}</b>`:''} en el siguiente corte.
+          <b>Por esto abonas y no ves que baje.</b>`
+      : e.clave==='parcial' ? ` Abonaste ${money(e.pagado)} pero ni siquiera cubriste el pago mínimo de
+          ${money(e.min)}. Además de intereses puede haber comisión por pago tardío.`
+      : ' No hay abonos registrados dentro de la ventana de pago de este corte.'}</div>
+
+    ${c.movs.length ? `
+      <h3 style="font-size:14px;margin:18px 0 9px">Conciliación</h3>
+      <div class="tw"><table>
+        <tbody>
+          <tr><td>Saldo anterior</td><td class="num">${money(p.saldoAnterior)}</td></tr>
+          <tr><td>+ Cargos del periodo (${c.movs.filter(m=>(TIPOS[m.tipo]||{}).suma===1).length})</td>
+              <td class="num neg">+ ${money(c.cargos)}</td></tr>
+          <tr><td>− Abonos del periodo (${c.movs.filter(m=>(TIPOS[m.tipo]||{}).suma===-1).length})</td>
+              <td class="num pos">− ${money(c.abonos)}</td></tr>
+          <tr><td><b>= Saldo que debería salir</b></td><td class="num"><b>${money(c.esperado)}</b></td></tr>
+          <tr><td><b>Saldo que reporta el banco</b></td><td class="num"><b>${money(p.saldoNuevo)}</b></td></tr>
+          <tr><td><b>Diferencia</b></td>
+              <td class="num ${c.cuadra?'pos':'neg'}"><b>${c.dif>=0?'+':''}${money(c.dif)}</b></td></tr>
+        </tbody></table></div>
+      ${c.cuadra
+        ? `<div class="aviso verde" style="margin-top:11px">✅ Cuadra. Todo lo que te cobraron está capturado
+           y explicado. No hay cobros fantasma en este corte.</div>`
+        : `<div class="aviso rojo" style="margin-top:11px">🔴 <b>No cuadra por ${money(Math.abs(c.dif))}.</b>
+           ${c.dif > 0
+             ? `El banco te cobra ${money(Math.abs(c.dif))} <b>de más</b> respecto a los movimientos capturados.
+                Puede ser: intereses o comisiones que no has capturado, una compra a meses que se difiere,
+                o un cargo que no reconoces. Revisa el estado de cuenta línea por línea y captura lo que falte;
+                si aun así no cuadra, ahí tienes qué aclarar con el banco.`
+             : `Tus movimientos capturados suman ${money(Math.abs(c.dif))} <b>más</b> de lo que reporta el banco.
+                Probablemente hay un movimiento duplicado, uno que aún no aparece en este corte,
+                o un abono que capturaste con fecha anterior a la real.`}</div>`}
+
+      ${Object.keys(desglose).length ? `<h3 style="font-size:14px;margin:18px 0 9px">Qué compone este corte</h3>
+        ${Object.entries(desglose).sort((a,b)=>b[1]-a[1]).map(([k,v]) => `
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)">
+            <span><span class="tag ${TIPOS[k].clase}">${TIPOS[k].etiqueta}</span></span>
+            <b class="num">${money(v)}</b></div>`).join('')}` : ''}
+
+      <h3 style="font-size:14px;margin:18px 0 9px">Movimientos del periodo (${c.movs.length})</h3>
+      <div class="tw"><table><tbody>${ordenados(c.movs).map(m => `<tr>
+        <td style="white-space:nowrap">${fechaCorta(m.fecha)}</td>
+        <td>${esc(m.descripcion||'—')}</td>
+        <td><span class="tag ${TIPOS[m.tipo].clase}">${TIPOS[m.tipo].etiqueta}</span></td>
+        <td class="num ${TIPOS[m.tipo].suma>0?'neg':'pos'}">${TIPOS[m.tipo].suma>0?'+':'−'} ${money(m.monto)}</td>
+      </tr>`).join('')}</tbody></table></div>`
+    : `<div class="aviso azul">Todavía no hay movimientos capturados dentro de este periodo, así que no puedo
+       conciliarlo. Carga el desglose del estado de cuenta para saber en qué se te fue y si el saldo cuadra.</div>`}
+
+    ${abonos.length ? `<h3 style="font-size:14px;margin:18px 0 9px">Abonos aplicados a este corte</h3>
+      <div class="tw"><table><tbody>${abonos.map(m => `<tr>
+        <td>${fechaCorta(m.fecha)}</td><td>${esc(m.descripcion||'Abono')}</td>
+        <td class="num pos">${money(m.monto)}</td></tr>`).join('')}</tbody></table></div>` : ''}
+    ${p.nota ? `<p class="sub" style="margin:16px 0 0">${esc(p.nota)}</p>` : ''}
+  `, [{texto:'Editar', accion:()=>{cerrarModal(); formPeriodo(id);}},
+      {espacio:true},
+      {texto:'Cerrar', clase:'', accion:cerrarModal}]);
+}
+
+function formPeriodo(id, tarjetaPre){
+  const p = id ? D.periodos.find(x => x.id === id) : {};
+  const tid = p.tarjetaId || tarjetaPre || (D.tarjetas[0]||{}).id;
+  const t = tarjeta(tid) || {};
+  /* Sugerimos la fecha límite a partir de los días para pagar de la tarjeta. */
+  modal(id ? 'Editar estado de cuenta' : 'Cargar estado de cuenta', `
+    <div class="fgrid">
+      <div class="field"><label>Tarjeta *</label><select name="tarjetaId">${selTarjetas(tid)}</select></div>
+      <div class="field"><label>Fecha de corte *</label>
+        <input type="date" name="fechaCorte" id="fCorte" value="${p.fechaCorte||''}"></div>
+      <div class="field"><label>Fecha límite de pago *</label>
+        <input type="date" name="fechaLimitePago" id="fPago" value="${p.fechaLimitePago||''}"></div>
+    </div>
+    <div class="fgrid">
+      <div class="field"><label>Saldo anterior</label>
+        <input name="saldoAnterior" value="${p.saldoAnterior??''}" inputmode="decimal" placeholder="0.00"></div>
+      <div class="field"><label>Saldo al corte *</label>
+        <input name="saldoNuevo" value="${p.saldoNuevo??''}" inputmode="decimal" placeholder="0.00"></div>
+    </div>
+    <div class="fgrid">
+      <div class="field"><label>Pago mínimo</label>
+        <input name="pagoMinimo" value="${p.pagoMinimo??''}" inputmode="decimal" placeholder="0.00"></div>
+      <div class="field"><label>Pago para no generar intereses</label>
+        <input name="pagoNoIntereses" value="${p.pagoNoIntereses??''}" inputmode="decimal" placeholder="0.00"></div>
+    </div>
+    <div class="field"><label>Notas</label>
+      <textarea name="nota" placeholder="Ej. cobro de $340 que no reconozco, aclaración folio 12345...">${esc(p.nota||'')}</textarea></div>
+    <p class="sub" style="margin:0">Todos estos números vienen en la primera hoja de tu estado de cuenta.
+    Captura además los movimientos del periodo (a mano o importando el desglose) para que pueda conciliar.</p>
+  `, [
+    ...(id ? [{texto:'Eliminar', clase:'danger', accion:()=>{cerrarModal(); borrarPeriodo(id);}}] : []),
+    {espacio:true},
+    {texto:'Cancelar', accion:cerrarModal},
+    {texto:'Guardar', clase:'', accion:()=>{
+      const v = leerForm();
+      if(!v.tarjetaId) return aviso('Elige la tarjeta');
+      if(!v.fechaCorte) return aviso('Captura la fecha de corte');
+      const obj = {tarjetaId:v.tarjetaId, fechaCorte:v.fechaCorte,
+        fechaLimitePago:v.fechaLimitePago || sumaDias(v.fechaCorte, num(tarjeta(v.tarjetaId)?.diasParaPagar)||20),
+        saldoAnterior:num(v.saldoAnterior), saldoNuevo:num(v.saldoNuevo),
+        pagoMinimo:num(v.pagoMinimo), pagoNoIntereses:num(v.pagoNoIntereses), nota:v.nota};
+      if(id) Object.assign(D.periodos.find(x=>x.id===id), obj);
+      else D.periodos.push(Object.assign({id:uid(), creado:hoyISO()}, obj));
+      cerrarModal(); refrescar(); aviso(id?'Estado de cuenta actualizado':'Estado de cuenta cargado ✓');
+    }},
+  ]);
+  /* Al poner la fecha de corte, calculamos sola la fecha límite de pago. */
+  $('fCorte').addEventListener('change', function(){
+    const pg = $('fPago');
+    if(this.value && !pg.value){
+      const sel = $('mBody').querySelector('[name=tarjetaId]').value;
+      pg.value = sumaDias(this.value, num(tarjeta(sel)?.diasParaPagar) || 20);
+    }
+  });
+}
+function borrarPeriodo(id){
+  const p = D.periodos.find(x => x.id === id);
+  confirmar('Eliminar estado de cuenta',
+    `¿Eliminar el corte del <b>${fechaCorta(p.fechaCorte)}</b> de ${esc(nomTarjeta(p.tarjetaId))}?
+     Los movimientos capturados no se borran.`,
+    () => { D.periodos = D.periodos.filter(x => x.id !== id); refrescar(); aviso('Estado de cuenta eliminado'); });
+}
+</script>
+
+<script>
+/* ==========================================================================
+   VISTA: Ingresos
+   ========================================================================== */
+function vIngresos(){
+  const lista = [...D.ingresos].sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
+  const mes = hoyISO().slice(0,7);
+  const delMes = lista.filter(i => (i.fecha||'').startsWith(mes)).reduce((s,i)=>s+num(i.monto),0);
+
+  /* Promedio de los últimos 6 meses con registros. */
+  const porMes = {};
+  lista.forEach(i => { const k = (i.fecha||'').slice(0,7); if(k) porMes[k] = (porMes[k]||0) + num(i.monto); });
+  const claves = Object.keys(porMes).sort().reverse().slice(0,6);
+  const prom = claves.length ? claves.reduce((s,k)=>s+porMes[k],0)/claves.length : 0;
+  const deuda = D.tarjetas.reduce((s,t) => s + saldoTarjeta(t.id), 0);
+
+  return `<div class="card">
+    <h2>Ingresos <span class="sp"></span><button class="btn sm" onclick="formIngreso()">+ Ingreso</button></h2>
+    <div class="grid g3" style="margin-bottom:14px">
+      ${kpi('Este mes', money(delMes), mesLargo(mes), 'ok')}
+      ${kpi('Promedio mensual', money(prom), `últimos ${claves.length} mes(es) con registro`)}
+      ${kpi('Tu deuda vs tu ingreso', prom>0 ? (deuda/prom).toFixed(1)+' meses' : '—',
+        prom>0 ? 'de ingreso completo para liquidar todo' : 'registra ingresos para calcularlo',
+        prom>0 && deuda/prom>3 ? 'bad' : '')}
+    </div>
+    ${lista.length ? `<div class="tw"><table>
+      <thead><tr><th>Fecha</th><th>Concepto</th><th>Fuente</th><th class="num">Monto</th><th></th></tr></thead>
+      <tbody>${lista.map(i => `<tr>
+        <td style="white-space:nowrap">${fechaCorta(i.fecha)}</td>
+        <td>${esc(i.concepto||'—')}${i.nota?`<div class="sub">${esc(i.nota)}</div>`:''}</td>
+        <td>${esc(i.fuente||'—')}</td>
+        <td class="num pos">${money(i.monto)}</td>
+        <td style="width:1%"><button class="ico" onclick="formIngreso('${i.id}')">✎</button>
+          <button class="ico" onclick="borrarIngreso('${i.id}')">🗑</button></td></tr>`).join('')}
+      </tbody></table></div>`
+      : vacioMsg(`Registra lo que entra: sueldo, ventas, comisiones, lo que sea.<br>
+        Sirve para saber cuánto de tu ingreso se está yendo a las tarjetas.`,
+        '<button class="btn" onclick="formIngreso()">+ Registrar ingreso</button>')}
+  </div>
+  ${claves.length > 1 ? `<div class="card"><h2>Ingreso por mes</h2>
+    ${(()=>{ const max = Math.max(...Object.values(porMes));
+      return Object.keys(porMes).sort().reverse().slice(0,12).map(k => `
+        <div style="margin-bottom:11px">
+          <div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:4px">
+            <span>${mesLargo(k)}</span><b class="num">${money(porMes[k])}</b></div>
+          <div class="mini"><i style="width:${(porMes[k]/max*100).toFixed(1)}%;background:var(--ok)"></i></div>
+        </div>`).join(''); })()}
+  </div>` : ''}`;
+}
+function formIngreso(id){
+  const i = id ? D.ingresos.find(x => x.id === id) : {};
+  modal(id ? 'Editar ingreso' : 'Nuevo ingreso', `
+    <div class="fgrid">
+      <div class="field"><label>Fecha *</label><input type="date" name="fecha" value="${i.fecha||hoyISO()}"></div>
+      <div class="field"><label>Monto *</label><input name="monto" value="${i.monto||''}" inputmode="decimal" placeholder="0.00"></div>
+    </div>
+    <div class="field"><label>Concepto *</label>
+      <input name="concepto" value="${esc(i.concepto||'')}" placeholder="Ej. Quincena, venta de..."></div>
+    <div class="field"><label>Fuente</label>
+      <input name="fuente" value="${esc(i.fuente||'')}" placeholder="Ej. Nómina, negocio, freelance"></div>
+    <div class="field"><label>Nota</label><input name="nota" value="${esc(i.nota||'')}" placeholder="Opcional"></div>
+  `, [
+    ...(id ? [{texto:'Eliminar', clase:'danger', accion:()=>{cerrarModal(); borrarIngreso(id);}}] : []),
+    {espacio:true},
+    {texto:'Cancelar', accion:cerrarModal},
+    {texto:'Guardar', clase:'', accion:()=>{
+      const v = leerForm();
+      if(!num(v.monto)) return aviso('Captura el monto');
+      const obj = {fecha:v.fecha||hoyISO(), monto:Math.abs(num(v.monto)),
+        concepto:v.concepto, fuente:v.fuente, nota:v.nota};
+      if(id) Object.assign(D.ingresos.find(x=>x.id===id), obj);
+      else D.ingresos.push(Object.assign({id:uid()}, obj));
+      cerrarModal(); refrescar(); aviso('Ingreso guardado ✓');
+    }},
+  ]);
+}
+function borrarIngreso(id){
+  D.ingresos = D.ingresos.filter(x => x.id !== id);
+  refrescar(); aviso('Ingreso eliminado');
+}
+
+/* ==========================================================================
+   VISTA: ¿Por qué no baja la deuda?
+   ========================================================================== */
+function vAnalisis(){
+  if(!D.movimientos.length)
+    return `<div class="card"><h2>¿Por qué no baja mi deuda?</h2>
+      ${vacioMsg(`Cuando cargues movimientos y abonos, aquí te desgloso peso por peso
+        cuánto de lo que pagas se lo queda el banco en intereses, IVA y comisiones,
+        y cuánto realmente baja tu deuda.`)}</div>`;
+
+  const abonado = D.movimientos.filter(m => (TIPOS[m.tipo]||{}).suma === -1)
+    .reduce((s,m)=>s+Math.abs(num(m.monto)),0);
+  const costo = D.movimientos.filter(m => TIPOS_COSTO.includes(m.tipo))
+    .reduce((s,m)=>s+Math.abs(num(m.monto)),0);
+  const compras = D.movimientos.filter(m => ['compra','disposicion'].includes(m.tipo))
+    .reduce((s,m)=>s+Math.abs(num(m.monto)),0);
+  const capital = abonado - costo;
+  const porCien = abonado > 0 ? (costo/abonado*100) : 0;
+
+  /* Costo por tipo. */
+  const porTipo = {};
+  TIPOS_COSTO.forEach(k => {
+    const v = D.movimientos.filter(m => m.tipo === k).reduce((s,m)=>s+Math.abs(num(m.monto)),0);
+    if(v > 0) porTipo[k] = v;
+  });
+  /* Costo por tarjeta, ordenado por lo que más te cuesta. */
+  const porTarjeta = D.tarjetas.map(t => {
+    const ms = movsDe(t.id);
+    return {t,
+      costo: ms.filter(m => TIPOS_COSTO.includes(m.tipo)).reduce((s,m)=>s+Math.abs(num(m.monto)),0),
+      abonado: ms.filter(m => (TIPOS[m.tipo]||{}).suma === -1).reduce((s,m)=>s+Math.abs(num(m.monto)),0),
+      saldo: saldoTarjeta(t.id)};
+  }).sort((a,b) => b.costo - a.costo);
+
+  /* Costo mes a mes. */
+  const porMes = {};
+  D.movimientos.filter(m => TIPOS_COSTO.includes(m.tipo)).forEach(m => {
+    const k = (m.fecha||'').slice(0,7); if(k) porMes[k] = (porMes[k]||0) + Math.abs(num(m.monto)); });
+  const mesesOrd = Object.keys(porMes).sort().reverse().slice(0,12);
+  const maxMes = mesesOrd.length ? Math.max(...mesesOrd.map(k=>porMes[k])) : 1;
+
+  /* Cortes que sólo pagaron el mínimo: la causa más común de que no baje. */
+  const minimos = D.periodos.map(p => ({p, e: estadoPago(p)}))
+    .filter(x => x.e.clave === 'minimo' || x.e.clave === 'parcial')
+    .sort((a,b) => (b.p.fechaCorte||'').localeCompare(a.p.fechaCorte||''));
+
+  return `<div class="card"><h2>La respuesta corta</h2>
+    ${costo > 0 ? (porCien >= 100
+      ? `<div class="aviso rojo" style="font-size:15px">
+          <b>Estás abonando menos de lo que te cobran.</b> Has pagado <b>${money(abonado)}</b>, pero entre
+          intereses, IVA y comisiones el banco te ha cobrado <b>${money(costo)}</b>.
+          Ni siquiera alcanzas a cubrir el costo de la deuda: <b>tu saldo crece solo</b>, aunque no vuelvas
+          a usar la tarjeta. Para que empiece a bajar necesitas abonar más de
+          <b>${money(costo/Math.max(1,mesesConCosto()))}</b> al mes, que es lo que te cuesta en promedio.
+        </div>`
+      : `<div class="aviso ${porCien>30?'rojo':porCien>15?'ambar':'azul'}" style="font-size:15px">
+          De cada <b>$100</b> que has abonado a tus tarjetas, <b>${money(porCien)}</b> se los quedó el banco
+          en intereses, IVA y comisiones. Sólo <b>${money(100-porCien)}</b> bajaron tu deuda de verdad.
+          ${porCien>30?' Por eso sientes que abonas y no pasa nada: la mayor parte de tu pago ni siquiera toca el capital.':''}
+        </div>`) : `<div class="aviso verde">Hasta ahora no tienes intereses ni comisiones capturados.
+      Si tus estados de cuenta traen cargos por interés, captúralos como movimientos tipo
+      <b>Intereses</b> para que aparezcan aquí.</div>`}
+
+    <div class="grid g4" style="margin-top:14px">
+      ${kpi('Total abonado', money(abonado), 'todo lo que has pagado', 'ok')}
+      ${kpi('Se lo quedó el banco', money(costo), 'intereses + IVA + comisiones', 'bad')}
+      ${kpi(capital>=0?'Bajó tu deuda':'Subió tu deuda', money(capital),
+        capital>=0?'abono neto a capital':'lo que creció sola la deuda', capital>0?'ok':'bad')}
+      ${kpi('Total comprado', money(compras), 'compras y disposiciones')}
+    </div>
+
+    ${abonado > 0 && costo > 0 ? `<div style="margin-top:18px">
+      <div class="split">
+        <i style="width:${Math.min(100,porCien).toFixed(1)}%;background:var(--bad)">${porCien>12?pct(Math.min(1,costo/abonado)):''}</i>
+        <i style="width:${Math.max(0,100-porCien).toFixed(1)}%;background:var(--ok)">${100-porCien>12?pct(1-costo/abonado):''}</i>
+      </div>
+      <div class="leg"><span>🔴 Intereses y comisiones: <b>${money(costo)}</b></span>
+        <span>🟢 Capital: <b>${money(Math.max(0,capital))}</b></span>
+        ${capital<0?`<span class="neg"><b>El costo superó tus abonos por ${money(-capital)}</b></span>`:''}</div>
+    </div>` : ''}
+  </div>
+
+  ${Object.keys(porTipo).length ? `<div class="card"><h2>En qué te cobran</h2>
+    <div class="tw"><table>
+      <thead><tr><th>Concepto</th><th class="num">Total pagado</th><th class="num">% del costo</th></tr></thead>
+      <tbody>${Object.entries(porTipo).sort((a,b)=>b[1]-a[1]).map(([k,v]) => `<tr>
+        <td><span class="tag ${TIPOS[k].clase}">${TIPOS[k].etiqueta}</span></td>
+        <td class="num neg">${money(v)}</td><td class="num">${pct(v/costo)}</td></tr>`).join('')}
+      </tbody></table></div>
+  </div>` : ''}
+
+  ${porTarjeta.some(x => x.costo > 0) ? `<div class="card">
+    <h2>Cuál tarjeta te está sangrando más</h2>
+    <div class="tw"><table>
+      <thead><tr><th>Tarjeta</th><th class="num">Debes</th><th class="num">Abonado</th>
+        <th class="num">Intereses y cargos</th><th class="num">De cada $100 abonados</th></tr></thead>
+      <tbody>${porTarjeta.map(x => `<tr>
+        <td><span class="dot" style="background:${x.t.color}"></span>${esc(x.t.nombre)}
+          ${x.t.tasaAnual?`<div class="sub">${num(x.t.tasaAnual)}% anual</div>`:''}</td>
+        <td class="num">${money(x.saldo)}</td>
+        <td class="num pos">${money(x.abonado)}</td>
+        <td class="num neg">${money(x.costo)}</td>
+        <td class="num ${x.abonado&&x.costo/x.abonado>.3?'neg':''}">
+          ${x.abonado>0 ? money(x.costo/x.abonado*100)+' al banco' : '—'}</td></tr>`).join('')}
+      </tbody></table></div>
+    ${(()=>{ const peor = porTarjeta.find(x => x.costo > 0);
+      return peor ? `<div class="aviso ambar" style="margin-top:12px">💡 <b>Estrategia:</b>
+        ataca primero <b>${esc(peor.t.nombre)}</b>, que es la que más te ha costado (${money(peor.costo)}).
+        Mientras las otras las mantienes en el pago mínimo, todo el excedente que tengas mándalo a ésta:
+        cada peso que le abones de más deja de generar intereses de inmediato.</div>` : ''; })()}
+  </div>` : ''}
+
+  ${mesesOrd.length ? `<div class="card"><h2>Cuánto te cuesta la deuda cada mes</h2>
+    ${mesesOrd.map(k => `<div style="margin-bottom:11px">
+      <div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:4px">
+        <span>${mesLargo(k)}</span><b class="num neg">${money(porMes[k])}</b></div>
+      <div class="mini"><i style="width:${(porMes[k]/maxMes*100).toFixed(1)}%;background:var(--bad)"></i></div>
+    </div>`).join('')}
+    <p class="sub" style="margin:12px 0 0">Esto es dinero que sale de tu bolsa cada mes sin comprar nada.</p>
+  </div>` : ''}
+
+  ${minimos.length ? `<div class="card"><h2>Cortes donde no alcanzó para liquidar</h2>
+    <p class="sub" style="margin:0 0 12px">Cada uno de estos cortes generó intereses sobre el saldo que quedó.
+    Si se repiten mes con mes, la deuda no baja aunque estés pagando puntual.</p>
+    <div class="tw"><table>
+      <thead><tr><th>Tarjeta</th><th>Corte</th><th class="num">Saldo</th><th class="num">Abonaste</th>
+        <th class="num">Faltó</th><th>Estado</th></tr></thead>
+      <tbody>${minimos.slice(0,15).map(({p,e}) => `<tr>
+        <td><span class="dot" style="background:${colTarjeta(p.tarjetaId)}"></span>${esc(nomTarjeta(p.tarjetaId))}</td>
+        <td>${fechaCorta(p.fechaCorte)}</td>
+        <td class="num">${money(p.saldoNuevo)}</td>
+        <td class="num pos">${money(e.pagado)}</td>
+        <td class="num neg">${money(e.faltante)}</td>
+        <td><span class="tag ${e.clase}">${e.etiqueta}</span></td></tr>`).join('')}
+      </tbody></table></div>
+  </div>` : ''}`;
+}
+</script>
+
+<script>
+/* ==========================================================================
+   VISTA: Datos — respaldo, importación y carga de estados de cuenta
+   ========================================================================== */
+function vDatos(){
+  const peso = new Blob([JSON.stringify(D)]).size;
+  return `<div class="card"><h2>Cargar un estado de cuenta ya vaciado</h2>
+    <p class="sub" style="margin:0 0 13px;max-width:720px">Pega aquí el JSON con los movimientos de un corte.
+    Es el formato que uso cuando me pasas el PDF de tu estado de cuenta y lo vacío por ti:
+    da de alta el corte y todos sus movimientos de un jalón, sin que captures nada a mano.</p>
+    <textarea id="pegado" style="min-height:150px;font-family:var(--mono);font-size:12px"
+      placeholder='{"tipo":"estado_de_cuenta","tarjeta":"BBVA Azul", ...}'></textarea>
+    <div style="display:flex;gap:9px;margin-top:11px;flex-wrap:wrap">
+      <button class="btn" onclick="importarPegado()">Cargar al registro</button>
+      <button class="btn ghost" onclick="verFormato()">Ver el formato</button>
+      <button class="btn ghost" onclick="cargarEjemplo()">Probar con datos de ejemplo</button>
+    </div>
+  </div>
+
+  <div class="card"><h2>Respaldo</h2>
+    <p class="sub" style="margin:0 0 13px;max-width:720px">Tus datos viven en este navegador. Si borras el
+    historial o cambias de dispositivo se pierden, así que <b>exporta tu respaldo seguido</b> y guárdalo
+    donde quieras. El archivo que baja es el mismo que puedes volver a importar aquí.</p>
+    <div style="display:flex;gap:9px;flex-wrap:wrap">
+      <button class="btn" onclick="exportar()">⬇ Exportar respaldo JSON</button>
+      <button class="btn ghost" onclick="$('archivo').click()">⬆ Importar respaldo</button>
+      <button class="btn ghost" onclick="exportarCSV()">⬇ Movimientos en CSV</button>
+      <input type="file" id="archivo" accept=".json,application/json" class="hide" onchange="importarArchivo(this)">
+    </div>
+    <div class="grid g4" style="margin-top:16px">
+      ${kpi('Tarjetas', String(D.tarjetas.length))}
+      ${kpi('Movimientos', String(D.movimientos.length))}
+      ${kpi('Estados de cuenta', String(D.periodos.length))}
+      ${kpi('Ingresos', String(D.ingresos.length))}
+    </div>
+    <p class="sub" style="margin:13px 0 0">Último guardado: ${fechaCorta(D.actualizado)} ·
+      ${(peso/1024).toFixed(1)} KB usados</p>
+  </div>
+
+  <div class="card"><h2>Zona de riesgo</h2>
+    <p class="sub" style="margin:0 0 13px">Borra todo y empieza de cero. Exporta tu respaldo antes.</p>
+    <button class="btn danger" onclick="borrarTodo()">Borrar todos mis datos</button>
+  </div>`;
+}
+
+function exportar(){
+  const blob = new Blob([JSON.stringify(D, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `tarjetas-respaldo-${hoyISO()}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+  aviso('Respaldo descargado ✓');
+}
+function exportarCSV(){
+  const filas = [['Fecha','Tarjeta','Concepto','Categoria','Tipo','Monto','Efecto','MSI','Nota']];
+  ordenados(D.movimientos).forEach(m => filas.push([
+    m.fecha, nomTarjeta(m.tarjetaId), m.descripcion||'', m.categoria||'',
+    (TIPOS[m.tipo]||{}).etiqueta || m.tipo, Math.abs(num(m.monto)).toFixed(2),
+    (TIPOS[m.tipo]||{}).suma > 0 ? 'cargo' : 'abono', m.msi||'', m.nota||'']));
+  const csv = '﻿' + filas.map(f => f.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
+  a.download = `movimientos-${hoyISO()}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+  aviso('CSV descargado ✓');
+}
+function importarArchivo(input){
+  const f = input.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = () => { try{ importar(JSON.parse(r.result)); }
+                     catch(e){ aviso('El archivo no es un JSON válido'); } };
+  r.readAsText(f);
+  input.value = '';
+}
+function importarPegado(){
+  const txt = $('pegado').value.trim();
+  if(!txt) return aviso('Pega primero el JSON');
+  try{ importar(JSON.parse(txt)); $('pegado').value = ''; }
+  catch(e){ aviso('El JSON tiene un error de sintaxis: ' + e.message, 4500); }
+}
+
+/* Acepta un respaldo completo, un lote de estado de cuenta o un arreglo de lotes. */
+function importar(obj){
+  if(Array.isArray(obj)){ obj.forEach(o => aplicarLote(o)); refrescar(); return; }
+  if(obj && Array.isArray(obj.tarjetas) && (obj.movimientos || obj.periodos)){
+    const res = `<b>${obj.tarjetas.length}</b> tarjeta(s), <b>${(obj.movimientos||[]).length}</b> movimiento(s),
+      <b>${(obj.periodos||[]).length}</b> estado(s) de cuenta y <b>${(obj.ingresos||[]).length}</b> ingreso(s)`;
+    modal('Importar respaldo', `<p style="margin:0 0 14px;line-height:1.6">El archivo trae ${res}.
+      ¿Cómo lo quieres importar?</p>
+      <div class="aviso azul" style="margin:0">Tus datos actuales: ${D.tarjetas.length} tarjetas,
+      ${D.movimientos.length} movimientos, ${D.periodos.length} estados de cuenta.</div>`, [
+      {texto:'Cancelar', accion:cerrarModal},
+      {texto:'Agregar a lo que ya tengo', accion:()=>{
+        (obj.tarjetas||[]).forEach(t => { if(!D.tarjetas.some(x => x.id === t.id)) D.tarjetas.push(t); });
+        ['movimientos','periodos','ingresos'].forEach(k =>
+          (obj[k]||[]).forEach(x => { if(!D[k].some(y => y.id === x.id)) D[k].push(x); }));
+        cerrarModal(); refrescar(); aviso('Datos agregados ✓');
+      }},
+      {texto:'Reemplazar todo', clase:'danger', accion:()=>{
+        D = Object.assign(estadoVacio(), obj);
+        cerrarModal(); refrescar(); aviso('Datos reemplazados ✓');
+      }},
+    ]);
+    return;
+  }
+  if(obj && (obj.tipo === 'estado_de_cuenta' || obj.movimientos || obj.periodo)){
+    aplicarLote(obj); refrescar(); return;
+  }
+  aviso('No reconozco ese formato. Revisa "Ver el formato".', 4000);
+}
+
+/* Carga un corte completo: crea la tarjeta si no existe, el periodo y sus movimientos.
+   Salta los movimientos que ya estaban capturados para no duplicar. */
+function aplicarLote(lote){
+  if(!lote || typeof lote !== 'object') return;
+  const nombre = String(lote.tarjeta || lote.nombreTarjeta || '').trim();
+  let t = D.tarjetas.find(x => x.id === lote.tarjetaId) ||
+          D.tarjetas.find(x => x.nombre.toLowerCase() === nombre.toLowerCase());
+  if(!t){
+    if(!nombre) return aviso('El lote no dice a qué tarjeta pertenece', 4000);
+    t = {id:uid(), nombre, banco:lote.banco||'', ultimos4:lote.ultimos4||'',
+         color:COLORES[D.tarjetas.length % COLORES.length],
+         limite:num(lote.limite), tasaAnual:num(lote.tasaAnual),
+         diaCorte:num(lote.diaCorte), diasParaPagar:num(lote.diasParaPagar)||20, creado:hoyISO()};
+    D.tarjetas.push(t);
+  }
+  /* Datos de la tarjeta que vengan en el lote y aún no tengamos. */
+  ['limite','tasaAnual','diaCorte'].forEach(k => { if(!num(t[k]) && num(lote[k])) t[k] = num(lote[k]); });
+
+  let nuevosMovs = 0, nuevosCortes = 0, repetidos = 0;
+  const p = lote.periodo || lote.corte;
+  if(p && p.fechaCorte){
+    const ya = D.periodos.find(x => x.tarjetaId === t.id && x.fechaCorte === p.fechaCorte);
+    const obj = {tarjetaId:t.id, fechaCorte:p.fechaCorte,
+      fechaLimitePago: p.fechaLimitePago || sumaDias(p.fechaCorte, num(t.diasParaPagar)||20),
+      saldoAnterior:num(p.saldoAnterior), saldoNuevo:num(p.saldoNuevo),
+      pagoMinimo:num(p.pagoMinimo), pagoNoIntereses:num(p.pagoNoIntereses), nota:p.nota||''};
+    if(ya) Object.assign(ya, obj);
+    else { D.periodos.push(Object.assign({id:uid(), creado:hoyISO()}, obj)); nuevosCortes++; }
+  }
+  (lote.movimientos || []).forEach(m => {
+    const fecha = String(m.fecha||'').slice(0,10);
+    const monto = Math.abs(num(m.monto));
+    if(!fecha || !monto) return;
+    const tipo = TIPOS[m.tipo] ? m.tipo : (num(m.monto) < 0 ? 'abono' : 'compra');
+    const dup = D.movimientos.some(x => x.tarjetaId === t.id && x.fecha === fecha &&
+      Math.abs(num(x.monto) - monto) < 0.01 && (x.descripcion||'') === (m.descripcion||''));
+    if(dup){ repetidos++; return; }
+    D.movimientos.push({id:uid(), tarjetaId:t.id, fecha, descripcion:m.descripcion||'',
+      tipo, monto, categoria:m.categoria||'', msi:m.msi||'', nota:m.nota||'', creado:new Date().toISOString()});
+    nuevosMovs++;
+  });
+  (lote.ingresos || []).forEach(i => {
+    if(!num(i.monto)) return;
+    D.ingresos.push({id:uid(), fecha:String(i.fecha||hoyISO()).slice(0,10), monto:Math.abs(num(i.monto)),
+      concepto:i.concepto||'', fuente:i.fuente||'', nota:i.nota||''});
+  });
+  aviso(`✓ ${t.nombre}: ${nuevosCortes} corte, ${nuevosMovs} movimientos` +
+        (repetidos ? ` (${repetidos} ya estaban)` : ''), 4200);
+}
+
+function verFormato(){
+  const ej = {
+    tipo: 'estado_de_cuenta',
+    tarjeta: 'BBVA Azul',
+    banco: 'BBVA', ultimos4: '4821', limite: 30000, tasaAnual: 62.5, diaCorte: 15, diasParaPagar: 20,
+    periodo: {fechaCorte:'2026-08-15', fechaLimitePago:'2026-09-04', saldoAnterior:12480.55,
+      saldoNuevo:14310.20, pagoMinimo:980.00, pagoNoIntereses:14310.20},
+    movimientos: [
+      {fecha:'2026-07-18', descripcion:'OXXO Centro', monto:189.50, tipo:'compra', categoria:'Súper'},
+      {fecha:'2026-07-29', descripcion:'Pago recibido', monto:2000.00, tipo:'abono'},
+      {fecha:'2026-08-15', descripcion:'Intereses del periodo', monto:648.30, tipo:'interes'},
+      {fecha:'2026-08-15', descripcion:'IVA de intereses', monto:103.73, tipo:'iva'}
+    ]
+  };
+  modal('Formato para cargar un estado de cuenta', `
+    <p style="margin:0 0 12px;line-height:1.6">Un objeto por corte. También puedes pegar un
+    <b>arreglo</b> <code>[ {...}, {...} ]</code> para cargar varios meses de golpe.</p>
+    <pre>${esc(JSON.stringify(ej, null, 2))}</pre>
+    <h3 style="font-size:14px;margin:18px 0 8px">Reglas</h3>
+    <ul style="margin:0;padding-left:20px;line-height:1.75;font-size:13.5px">
+      <li>Si la tarjeta no existe, se crea con el nombre que pongas en <code>tarjeta</code>.
+          Si ya existe, se le agregan los movimientos.</li>
+      <li>Los montos van siempre en <b>positivo</b>. Lo que decide si suma o resta es <code>tipo</code>.</li>
+      <li>Tipos válidos: ${Object.keys(TIPOS).map(k=>`<code>${k}</code>`).join(', ')}.</li>
+      <li>Las fechas van en <code>AAAA-MM-DD</code>.</li>
+      <li>Si vuelves a cargar el mismo corte, los movimientos repetidos
+          (misma fecha, monto y concepto) se saltan: no se duplica nada.</li>
+      <li><code>periodo</code> es opcional; si sólo traes movimientos sueltos, omítelo.</li>
+    </ul>
+    <div class="aviso azul" style="margin:16px 0 0">Pásame el PDF de tu estado de cuenta y yo te devuelvo
+    este JSON ya lleno, con todos los movimientos clasificados por categoría.</div>
+  `, [{texto:'Copiar el ejemplo', accion:()=>{
+        navigator.clipboard?.writeText(JSON.stringify(ej, null, 2));
+        aviso('Ejemplo copiado ✓');
+      }}, {espacio:true}, {texto:'Cerrar', clase:'', accion:cerrarModal}]);
+}
+
+function cargarEjemplo(){
+  confirmar('Cargar datos de ejemplo',
+    `Voy a agregar una tarjeta de ejemplo con dos cortes y sus movimientos para que veas cómo se ve
+     todo funcionando. Puedes borrarla después sin tocar tus datos reales.`,
+    () => {
+      aplicarLote({tipo:'estado_de_cuenta', tarjeta:'Ejemplo · Banco Demo', banco:'Demo', ultimos4:'0000',
+        limite:30000, tasaAnual:62.5, diaCorte:15, diasParaPagar:20,
+        periodo:{fechaCorte:'2026-07-15', fechaLimitePago:'2026-08-04', saldoAnterior:9800,
+          saldoNuevo:12480.55, pagoMinimo:860, pagoNoIntereses:12480.55},
+        movimientos:[
+          {fecha:'2026-06-20', descripcion:'Súper de la semana', monto:1840.20, tipo:'compra', categoria:'Súper'},
+          {fecha:'2026-06-28', descripcion:'Gasolina', monto:900, tipo:'compra', categoria:'Gasolina'},
+          {fecha:'2026-07-02', descripcion:'Pago recibido', monto:1500, tipo:'abono'},
+          {fecha:'2026-07-15', descripcion:'Intereses del periodo', monto:1240.30, tipo:'interes'},
+          {fecha:'2026-07-15', descripcion:'IVA de intereses', monto:198.45, tipo:'iva'},
+        ]});
+      aplicarLote({tipo:'estado_de_cuenta', tarjeta:'Ejemplo · Banco Demo',
+        periodo:{fechaCorte:'2026-08-15', fechaLimitePago:'2026-09-04', saldoAnterior:12480.55,
+          saldoNuevo:14310.20, pagoMinimo:980, pagoNoIntereses:14310.20},
+        movimientos:[
+          {fecha:'2026-07-22', descripcion:'Farmacia', monto:640.50, tipo:'compra', categoria:'Salud'},
+          {fecha:'2026-07-30', descripcion:'Restaurante', monto:1180, tipo:'compra', categoria:'Comida'},
+          {fecha:'2026-08-01', descripcion:'Abono desde nómina', monto:900, tipo:'abono'},
+          {fecha:'2026-08-15', descripcion:'Intereses del periodo', monto:1642.10, tipo:'interes'},
+          {fecha:'2026-08-15', descripcion:'IVA de intereses', monto:262.74, tipo:'iva'},
+          {fecha:'2026-08-15', descripcion:'Comisión por pago tardío', monto:404.31, tipo:'comision'},
+        ],
+        ingresos:[{fecha:'2026-08-15', monto:9800, concepto:'Quincena', fuente:'Nómina'}]});
+      refrescar(); ir('resumen');
+    });
+}
+function borrarTodo(){
+  confirmar('Borrar todos mis datos',
+    `Se van a borrar <b>${D.tarjetas.length} tarjetas</b>, <b>${D.movimientos.length} movimientos</b>,
+     <b>${D.periodos.length} estados de cuenta</b> y <b>${D.ingresos.length} ingresos</b>.
+     Esto <b>no se puede deshacer</b>. ¿Ya exportaste tu respaldo?`,
+    () => { D = estadoVacio(); refrescar(); ir('resumen'); aviso('Todo borrado'); });
+}
+
+/* ---------- Arranque ---------- */
+render();
+</script>
+</body>
+</html>
