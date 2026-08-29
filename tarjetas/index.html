@@ -353,7 +353,9 @@ function saldoTarjeta(id){
   const cortes = periodosDe(id);
   const ultimo = cortes[0];  // el más reciente
   if(ultimo){
-    const posteriores = movsDe(id).filter(m => (m.fecha||'') > ultimo.fechaCorte);
+    const posteriores = movsDe(id).filter(m => m.corte
+      ? m.corte > ultimo.fechaCorte
+      : (m.fecha||'') > ultimo.fechaCorte);
     return num(ultimo.saldoNuevo) + posteriores.reduce((s,m) => s + efecto(m), 0);
   }
   return movsDe(id).reduce((s,m) => s + efecto(m), 0);
@@ -362,19 +364,29 @@ function periodosDe(id){
   return D.periodos.filter(p => p.tarjetaId === id)
     .sort((a,b) => (b.fechaCorte||'').localeCompare(a.fechaCorte||''));
 }
-/* Movimientos que caen dentro de un periodo: desde el día después del corte
-   anterior hasta el corte de este periodo. */
+/* Movimientos que caen dentro de un periodo.
+   Si el movimiento trae `corte` (viene de un estado de cuenta importado), manda
+   ese dato: los bancos imprimen compras con fecha anterior al corte en el
+   estado de cuenta del mes siguiente, y la fecha de la transacción mentiría.
+   Si no lo trae (captura manual), se ubica por fecha. */
 function movsDelPeriodo(p){
   const previos = periodosDe(p.tarjetaId).filter(x => (x.fechaCorte||'') < (p.fechaCorte||''));
   const desde = previos.length ? sumaDias(previos[0].fechaCorte, 1) : '0000-01-01';
-  return movsDe(p.tarjetaId).filter(m => (m.fecha||'') >= desde && (m.fecha||'') <= (p.fechaCorte||''));
+  return movsDe(p.tarjetaId).filter(m => m.corte
+    ? m.corte === p.fechaCorte
+    : (m.fecha||'') >= desde && (m.fecha||'') <= (p.fechaCorte||''));
 }
-/* Abonos hechos en la ventana de pago: entre el corte y la fecha límite. */
+/* Abonos que corresponden a un corte: todo lo pagado desde ese corte hasta el
+   siguiente. Se separan en puntuales (dentro de la fecha límite) y tardíos,
+   porque un pago hecho un día después sí bajó tu deuda, pero ya no te salvó
+   de los intereses. Contarlo como "sin pagar" sería mentirte. */
 function abonosDelPeriodo(p){
+  const posteriores = periodosDe(p.tarjetaId).filter(x => (x.fechaCorte||'') > (p.fechaCorte||''));
+  const hasta = posteriores.length ? posteriores[posteriores.length-1].fechaCorte : '9999-12-31';
   return movsDe(p.tarjetaId).filter(m =>
     (TIPOS[m.tipo]||{}).suma === -1 &&
     (m.fecha||'') > (p.fechaCorte||'') &&
-    (m.fecha||'') <= (p.fechaLimitePago || sumaDias(p.fechaCorte, 20)));
+    (m.fecha||'') <= hasta);
 }
 
 /* Conciliación: ¿el saldo que te cobra el banco cuadra con los movimientos?
@@ -389,14 +401,23 @@ function conciliar(p){
   return {movs, cargos, abonos, costos, esperado, dif, cuadra: Math.abs(dif) < 1};
 }
 
-/* Estado del pago de un corte: ¿alcanzó para no generar intereses? */
+/* Estado del pago de un corte: ¿alcanzó para no generar intereses?
+   Sólo los abonos puntuales cuentan para librarte del interés; los tardíos
+   se reportan aparte porque sí bajaron el saldo. */
 function estadoPago(p){
-  const pagado = abonosDelPeriodo(p).reduce((s,m)=>s+Math.abs(num(m.monto)),0);
+  const limite = p.fechaLimitePago || sumaDias(p.fechaCorte, 20);
+  const todos = abonosDelPeriodo(p);
+  const suma = arr => arr.reduce((s,m)=>s+Math.abs(num(m.monto)),0);
+  const puntuales = todos.filter(m => (m.fecha||'') <= limite);
+  const tardios   = todos.filter(m => (m.fecha||'') >  limite);
+  const pagado = suma(puntuales), tardio = suma(tardios);
   const noInt = num(p.pagoNoIntereses) || num(p.saldoNuevo);
   const min = num(p.pagoMinimo);
-  const venceEn = diasEntre(hoyISO(), p.fechaLimitePago);
+  const venceEn = diasEntre(hoyISO(), limite);
   let clave, etiqueta, clase;
-  if(pagado <= 0){
+  if(pagado <= 0 && tardio > 0){
+    clave='tardio'; etiqueta='Pagado fuera de fecha'; clase='rojo';
+  }else if(pagado <= 0){
     clave = venceEn !== null && venceEn < 0 ? 'vencido' : 'pendiente';
     etiqueta = clave === 'vencido' ? 'Sin pagar · vencido' : 'Sin pagar';
     clase = clave === 'vencido' ? 'rojo' : 'ambar';
@@ -407,7 +428,8 @@ function estadoPago(p){
   }else{
     clave='parcial'; etiqueta='Pago parcial · genera intereses'; clase='rojo';
   }
-  return {pagado, noInt, min, faltante: Math.max(0, noInt - pagado), venceEn, clave, etiqueta, clase};
+  return {pagado, tardio, total: pagado + tardio, puntuales, tardios, noInt, min,
+          faltante: Math.max(0, noInt - pagado), venceEn, clave, etiqueta, clase};
 }
 
 /* Próximo corte y próxima fecha de pago según la configuración de la tarjeta. */
@@ -577,7 +599,7 @@ function vResumen(){
     const e = estadoPago(p);
     if(e.venceEn === null) return;
     if(e.clave === 'total') return;
-    if(e.venceEn < 0 && e.venceEn > -60 && e.pagado <= 0){
+    if(e.venceEn < 0 && e.venceEn > -60 && e.total <= 0){
       avisos.push(`<div class="aviso rojo">🔴 <b>${esc(nomTarjeta(p.tarjetaId))}</b> — el pago del corte del
         ${fechaCorta(p.fechaCorte)} venció el ${fechaCorta(p.fechaLimitePago)} y no tienes abonos registrados.
         Debías ${money(p.pagoNoIntereses||p.saldoNuevo)}.</div>`);
@@ -933,7 +955,8 @@ function vCortes(){
           <td>${fechaCorta(p.fechaLimitePago)}</td>
           <td class="num">${money(p.saldoNuevo)}</td>
           <td class="num">${money(p.pagoMinimo)}</td>
-          <td class="num ${e.pagado>0?'pos':''}">${money(e.pagado)}</td>
+          <td class="num ${e.pagado>0?'pos':''}">${money(e.pagado)}
+            ${e.tardio>0?`<div class="sub">+${money(e.tardio)} tarde</div>`:''}</td>
           <td><span class="tag ${e.clase}">${e.etiqueta}</span></td>
           <td>${c.movs.length === 0 ? '<span class="tag gris">sin movs</span>'
               : c.cuadra ? '<span class="tag verde">✓ cuadra</span>'
@@ -962,7 +985,9 @@ function detallePeriodo(id){
     <div class="grid g3" style="margin-bottom:14px">
       ${kpi('Saldo anterior', money(p.saldoAnterior))}
       ${kpi('Saldo del corte', money(p.saldoNuevo))}
-      ${kpi('Abonado en la ventana', money(e.pagado), e.pagado>0?`${abonos.length} abono(s)`:'ninguno', e.pagado>0?'ok':'')}
+      ${kpi('Abonado a este corte', money(e.total),
+        e.total>0 ? `${abonos.length} abono(s)` + (e.tardio>0?` · ${money(e.tardio)} fuera de fecha`:' a tiempo')
+                  : 'ninguno', e.total>0?'ok':'')}
     </div>
     <div class="grid g3" style="margin-bottom:16px">
       ${kpi('Pago mínimo', money(p.pagoMinimo))}
@@ -978,7 +1003,13 @@ function detallePeriodo(id){
           <b>Por esto abonas y no ves que baje.</b>`
       : e.clave==='parcial' ? ` Abonaste ${money(e.pagado)} pero ni siquiera cubriste el pago mínimo de
           ${money(e.min)}. Además de intereses puede haber comisión por pago tardío.`
-      : ' No hay abonos registrados dentro de la ventana de pago de este corte.'}</div>
+      : e.clave==='tardio' ? ` Abonaste <b>${money(e.tardio)}</b>, pero después del
+          ${fechaCorta(p.fechaLimitePago)}. El dinero sí bajó tu saldo, pero llegó tarde para
+          librarte de los intereses de este corte, y puede haber comisión por pago tardío.`
+      : ' No hay abonos registrados para este corte.'}</div>
+    ${e.tardio > 0 && e.clave !== 'tardio' ? `<div class="aviso ambar">🟡 Además abonaste
+      <b>${money(e.tardio)}</b> después de la fecha límite: ese dinero bajó tu saldo pero
+      ya no evitó los intereses de este corte.</div>` : ''}
 
     ${c.movs.length ? `
       <h3 style="font-size:14px;margin:18px 0 9px">Conciliación</h3>
@@ -1221,7 +1252,7 @@ function vAnalisis(){
 
   /* Cortes que sólo pagaron el mínimo: la causa más común de que no baje. */
   const minimos = D.periodos.map(p => ({p, e: estadoPago(p)}))
-    .filter(x => x.e.clave === 'minimo' || x.e.clave === 'parcial')
+    .filter(x => ['minimo','parcial','tardio','vencido'].includes(x.e.clave))
     .sort((a,b) => (b.p.fechaCorte||'').localeCompare(a.p.fechaCorte||''));
 
   return `<div class="card"><h2>La respuesta corta</h2>
@@ -1283,11 +1314,17 @@ function vAnalisis(){
         <td class="num ${x.abonado&&x.costo/x.abonado>.3?'neg':''}">
           ${x.abonado>0 ? money(x.costo/x.abonado*100)+' al banco' : '—'}</td></tr>`).join('')}
       </tbody></table></div>
-    ${(()=>{ const peor = porTarjeta.find(x => x.costo > 0);
-      return peor ? `<div class="aviso ambar" style="margin-top:12px">💡 <b>Estrategia:</b>
-        ataca primero <b>${esc(peor.t.nombre)}</b>, que es la que más te ha costado (${money(peor.costo)}).
-        Mientras las otras las mantienes en el pago mínimo, todo el excedente que tengas mándalo a ésta:
-        cada peso que le abones de más deja de generar intereses de inmediato.</div>` : ''; })()}
+    ${(()=>{ const conCosto = porTarjeta.filter(x => x.costo > 0);
+      const peor = conCosto[0];
+      if(!peor) return '';
+      return `<div class="aviso ambar" style="margin-top:12px">💡 <b>Estrategia:</b>
+        ${conCosto.length > 1
+          ? `ataca primero <b>${esc(peor.t.nombre)}</b>, que es la que más te ha costado
+             (${money(peor.costo)}). Mantén las otras en el pago mínimo y todo el excedente
+             mándalo a ésta:`
+          : `en <b>${esc(peor.t.nombre)}</b> llevas ${money(peor.costo)} pagados en puro interés.
+             Todo excedente que tengas mándalo a esta tarjeta:`}
+        cada peso que le abones de más deja de generar intereses de inmediato.</div>`; })()}
   </div>` : ''}
 
   ${mesesOrd.length ? `<div class="card"><h2>Cuánto te cuesta la deuda cada mes</h2>
@@ -1300,8 +1337,9 @@ function vAnalisis(){
   </div>` : ''}
 
   ${minimos.length ? `<div class="card"><h2>Cortes donde no alcanzó para liquidar</h2>
-    <p class="sub" style="margin:0 0 12px">Cada uno de estos cortes generó intereses sobre el saldo que quedó.
-    Si se repiten mes con mes, la deuda no baja aunque estés pagando puntual.</p>
+    <p class="sub" style="margin:0 0 12px">Cada uno de estos cortes generó intereses sobre el saldo
+    que quedó, ya sea porque no alcanzó, porque no se pagó o porque el abono llegó después de la
+    fecha límite. Si se repiten mes con mes, la deuda no baja aunque estés pagando.</p>
     <div class="tw"><table>
       <thead><tr><th>Tarjeta</th><th>Corte</th><th class="num">Saldo</th><th class="num">Abonaste</th>
         <th class="num">Faltó</th><th>Estado</th></tr></thead>
@@ -1309,7 +1347,8 @@ function vAnalisis(){
         <td><span class="dot" style="background:${colTarjeta(p.tarjetaId)}"></span>${esc(nomTarjeta(p.tarjetaId))}</td>
         <td>${fechaCorta(p.fechaCorte)}</td>
         <td class="num">${money(p.saldoNuevo)}</td>
-        <td class="num pos">${money(e.pagado)}</td>
+        <td class="num pos">${money(e.pagado)}
+          ${e.tardio>0?`<div class="sub">+${money(e.tardio)} tarde</div>`:''}</td>
         <td class="num neg">${money(e.faltante)}</td>
         <td><span class="tag ${e.clase}">${e.etiqueta}</span></td></tr>`).join('')}
       </tbody></table></div>
@@ -1445,11 +1484,15 @@ function aplicarLote(lote){
          diaCorte:num(lote.diaCorte), diasParaPagar:num(lote.diasParaPagar)||20, creado:hoyISO()};
     D.tarjetas.push(t);
   }
-  /* Datos de la tarjeta que vengan en el lote y aún no tengamos. */
-  ['limite','tasaAnual','diaCorte'].forEach(k => { if(!num(t[k]) && num(lote[k])) t[k] = num(lote[k]); });
+  /* Datos de la tarjeta que traiga el lote. Los estados de cuenta se cargan en
+     orden, así que el más reciente deja el límite y la tasa vigentes. */
+  ['limite','tasaAnual','diaCorte','diasParaPagar'].forEach(k => { if(num(lote[k])) t[k] = num(lote[k]); });
+  ['banco','ultimos4'].forEach(k => { if(!t[k] && lote[k]) t[k] = lote[k]; });
 
   let nuevosMovs = 0, nuevosCortes = 0, repetidos = 0;
-  const p = lote.periodo || lote.corte;
+  /* `periodo` es el nombre bueno; se acepta `corte` como alias sólo si viene
+     como objeto, para no confundirlo con el `corte` de cada movimiento. */
+  const p = lote.periodo || (lote.corte && typeof lote.corte === 'object' ? lote.corte : null);
   if(p && p.fechaCorte){
     const ya = D.periodos.find(x => x.tarjetaId === t.id && x.fechaCorte === p.fechaCorte);
     const obj = {tarjetaId:t.id, fechaCorte:p.fechaCorte,
@@ -1459,16 +1502,25 @@ function aplicarLote(lote){
     if(ya) Object.assign(ya, obj);
     else { D.periodos.push(Object.assign({id:uid(), creado:hoyISO()}, obj)); nuevosCortes++; }
   }
+  /* Un mismo día puede traer dos cargos idénticos de verdad (dos suscripciones
+     del mismo precio). Por eso no basta con preguntar "¿ya existe uno igual?":
+     contamos cuántos hay ya y cuántos trae el lote, y sólo saltamos el traslape. */
+  const clave = x => [x.fecha, Math.abs(num(x.monto)).toFixed(2), x.descripcion||''].join('|');
+  const yaHay = {};
+  D.movimientos.filter(x => x.tarjetaId === t.id)
+    .forEach(x => { const k = clave(x); yaHay[k] = (yaHay[k]||0) + 1; });
+  const vistos = {};
   (lote.movimientos || []).forEach(m => {
     const fecha = String(m.fecha||'').slice(0,10);
     const monto = Math.abs(num(m.monto));
     if(!fecha || !monto) return;
     const tipo = TIPOS[m.tipo] ? m.tipo : (num(m.monto) < 0 ? 'abono' : 'compra');
-    const dup = D.movimientos.some(x => x.tarjetaId === t.id && x.fecha === fecha &&
-      Math.abs(num(x.monto) - monto) < 0.01 && (x.descripcion||'') === (m.descripcion||''));
-    if(dup){ repetidos++; return; }
+    const k = clave({fecha, monto, descripcion:m.descripcion});
+    vistos[k] = (vistos[k]||0) + 1;
+    if(vistos[k] <= (yaHay[k]||0)){ repetidos++; return; }
     D.movimientos.push({id:uid(), tarjetaId:t.id, fecha, descripcion:m.descripcion||'',
-      tipo, monto, categoria:m.categoria||'', msi:m.msi||'', nota:m.nota||'', creado:new Date().toISOString()});
+      tipo, monto, categoria:m.categoria||'', msi:m.msi||'', nota:m.nota||'',
+      corte: m.corte || (p && p.fechaCorte) || '', creado:new Date().toISOString()});
     nuevosMovs++;
   });
   (lote.ingresos || []).forEach(i => {
