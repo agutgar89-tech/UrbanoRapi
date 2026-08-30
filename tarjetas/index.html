@@ -201,6 +201,10 @@ details.card>summary .sub{font-weight:500}
   box-shadow:0 4px 16px rgba(0,0,0,.25);line-height:1.45}
 #tip.on{opacity:1}
 
+.nota{color:var(--tx-3);cursor:help;font-size:13px;margin-left:4px;border-radius:3px}
+.nota:hover,.nota:focus-visible{color:var(--acc);outline:none}
+.nota:focus-visible{box-shadow:0 0 0 2px var(--acc)}
+
 select.cat{padding:5px 8px;font-size:13px;border-radius:6px;min-width:135px}
 select.cat:not([value=""]){border-color:var(--line)}
 
@@ -970,6 +974,8 @@ function filaMov(m, conCategoria){
     <td style="white-space:nowrap">${fechaCorta(m.fecha)}</td>
     <td>${esc(m.descripcion||'(sin concepto)')}
       ${m.msi ? `<span class="tag azul">${esc(m.msi)} MSI</span>` : ''}
+      ${m.nota ? `<span class="nota" tabindex="0" data-tip="${esc(m.nota)}"
+        aria-label="Nota: ${esc(m.nota)}">ⓘ</span>` : ''}
       ${!conCategoria && m.categoria ? `<div class="sub">${esc(m.categoria)}</div>` : ''}</td>
     ${conCategoria ? `<td>${editable ? selectorCategoria(m)
         : `<span class="sub">—</span>`}</td>` : ''}
@@ -1224,7 +1230,8 @@ function detallePeriodo(id){
       <h3 style="font-size:14px;margin:18px 0 9px">Movimientos del periodo (${c.movs.length})</h3>
       <div class="tw"><table><tbody>${ordenados(c.movs).map(m => `<tr>
         <td style="white-space:nowrap">${fechaCorta(m.fecha)}</td>
-        <td>${esc(m.descripcion||'—')}</td>
+        <td>${esc(m.descripcion||'—')}
+          ${m.nota ? `<span class="nota" tabindex="0" data-tip="${esc(m.nota)}">ⓘ</span>` : ''}</td>
         <td><span class="tag ${TIPOS[m.tipo].clase}">${TIPOS[m.tipo].etiqueta}</span></td>
         <td class="num ${TIPOS[m.tipo].suma>0?'neg':'pos'}">${TIPOS[m.tipo].suma>0?'+':'−'} ${money(m.monto)}</td>
       </tr>`).join('')}</tbody></table></div>`
