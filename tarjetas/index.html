@@ -220,18 +220,27 @@ const LLAVE = 'tarjetas-credito-v1';
 const IVA = 0.16;                 // IVA sobre intereses y comisiones (México)
 const COLORES = ['#1f4e8c','#7a1f3d','#1f6b4a','#5b3a8c','#8c5a1f','#0f5f6b','#6b1f1f','#2d3748'];
 
-/* Tipos de movimiento. suma = cómo afecta la deuda de la tarjeta.
-   +1 aumenta lo que debes, -1 lo disminuye. */
+/* Tipos de movimiento.
+   suma = cómo afecta la deuda: +1 la sube, -1 la baja.
+   pago = si además salió dinero de tu bolsa. Un cashback y un diferimiento a
+   meses bajan el saldo del corte pero no son dinero que tú abonaste, y
+   contarlos como abono inflaría lo que crees haber pagado. */
 const TIPOS = {
-  compra:      {etiqueta:'Compra',              suma:+1, clase:'gris'},
-  disposicion: {etiqueta:'Disposición efectivo', suma:+1, clase:'ambar'},
-  interes:     {etiqueta:'Intereses',            suma:+1, clase:'rojo'},
-  iva:         {etiqueta:'IVA de intereses',     suma:+1, clase:'rojo'},
-  comision:    {etiqueta:'Comisión',             suma:+1, clase:'rojo'},
-  anualidad:   {etiqueta:'Anualidad',            suma:+1, clase:'rojo'},
-  abono:       {etiqueta:'Abono / Pago',         suma:-1, clase:'verde'},
-  bonificacion:{etiqueta:'Bonificación',         suma:-1, clase:'verde'},
+  compra:      {etiqueta:'Compra',               suma:+1, pago:false, clase:'gris'},
+  disposicion: {etiqueta:'Disposición efectivo', suma:+1, pago:false, clase:'ambar'},
+  mensualidad: {etiqueta:'Mensualidad a meses',  suma:+1, pago:false, clase:'azul'},
+  interes:     {etiqueta:'Intereses',            suma:+1, pago:false, clase:'rojo'},
+  iva:         {etiqueta:'IVA de intereses',     suma:+1, pago:false, clase:'rojo'},
+  comision:    {etiqueta:'Comisión',             suma:+1, pago:false, clase:'rojo'},
+  anualidad:   {etiqueta:'Anualidad',            suma:+1, pago:false, clase:'rojo'},
+  abono:       {etiqueta:'Abono / Pago',         suma:-1, pago:true,  clase:'verde'},
+  bonificacion:{etiqueta:'Bonificación',         suma:-1, pago:false, clase:'verde'},
+  diferimiento:{etiqueta:'Diferido a meses',     suma:-1, pago:false, clase:'azul'},
 };
+/* ¿Este movimiento es dinero que tú pagaste? */
+const esPago = m => !!(TIPOS[m.tipo] || {}).pago;
+/* ¿Baja el saldo del corte, lo hayas pagado tú o no? */
+const bajaSaldo = m => (TIPOS[m.tipo] || {}).suma === -1;
 /* Lo que el banco te cobra por deber dinero: esto es lo que hace que no baje la deuda. */
 const TIPOS_COSTO = ['interes','iva','comision','anualidad'];
 const CATEGORIAS = ['Súper','Comida','Gasolina','Transporte','Servicios','Suscripciones',
@@ -345,10 +354,12 @@ function efecto(m){
   return t.suma * Math.abs(num(m.monto));
 }
 
-/* Saldo actual de una tarjeta.
+/* Saldo actual de una tarjeta: lo que debes en total.
    Si hay un estado de cuenta cargado, partimos de su saldo final (que es la
    verdad del banco) y sumamos sólo lo que pasó después. Así el saldo no se
-   deforma por movimientos capturados a medias antes de ese corte. */
+   deforma por movimientos capturados a medias antes de ese corte.
+   Incluye el saldo diferido a meses: todavía no te lo exigen este corte,
+   pero lo debes igual. */
 function saldoTarjeta(id){
   const cortes = periodosDe(id);
   const ultimo = cortes[0];  // el más reciente
@@ -356,9 +367,16 @@ function saldoTarjeta(id){
     const posteriores = movsDe(id).filter(m => m.corte
       ? m.corte > ultimo.fechaCorte
       : (m.fecha||'') > ultimo.fechaCorte);
-    return num(ultimo.saldoNuevo) + posteriores.reduce((s,m) => s + efecto(m), 0);
+    return num(ultimo.saldoNuevo) + num(ultimo.saldoDiferido)
+           + posteriores.reduce((s,m) => s + efecto(m), 0);
   }
   return movsDe(id).reduce((s,m) => s + efecto(m), 0);
+}
+/* Lo exigible en el corte más reciente, sin contar lo diferido a meses. */
+function saldoExigible(id){
+  const ultimo = periodosDe(id)[0];
+  if(!ultimo) return saldoTarjeta(id);
+  return saldoTarjeta(id) - num(ultimo.saldoDiferido);
 }
 function periodosDe(id){
   return D.periodos.filter(p => p.tarjetaId === id)
@@ -383,8 +401,7 @@ function movsDelPeriodo(p){
 function abonosDelPeriodo(p){
   const posteriores = periodosDe(p.tarjetaId).filter(x => (x.fechaCorte||'') > (p.fechaCorte||''));
   const hasta = posteriores.length ? posteriores[posteriores.length-1].fechaCorte : '9999-12-31';
-  return movsDe(p.tarjetaId).filter(m =>
-    (TIPOS[m.tipo]||{}).suma === -1 &&
+  return movsDe(p.tarjetaId).filter(m => esPago(m) &&
     (m.fecha||'') > (p.fechaCorte||'') &&
     (m.fecha||'') <= hasta);
 }
@@ -535,6 +552,7 @@ function pintaTarjeta(t, conAcciones){
   const lim = num(t.limite);
   const uso = lim > 0 ? Math.min(1, saldo/lim) : 0;
   const fechas = proximasFechas(t);
+  const dif = num((periodosDe(t.id)[0]||{}).saldoDiferido);
   return `<div class="cc" style="background:linear-gradient(135deg, ${t.color} 0%, ${sombrear(t.color,-22)} 100%)">
     ${conAcciones ? `<div class="cc-acts">
       <button onclick="formTarjeta('${t.id}')" title="Editar">✎</button>
@@ -547,6 +565,8 @@ function pintaTarjeta(t, conAcciones){
     <div class="cc-saldo">
       <div class="l">Debes hoy</div>
       <div class="v">${money(saldo)}</div>
+      ${dif > 0 ? `<div class="cc-meta"><span>Exigible al corte ${money(saldo-dif)}</span>
+        <span>A meses ${money(dif)}</span></div>` : ''}
       ${lim > 0 ? `<div class="bar"><i style="width:${(uso*100).toFixed(1)}%"></i></div>
         <div class="cc-meta"><span>Límite ${money(lim)}</span><span>Usado ${pct(uso)}</span>
         <span>Disponible ${money(Math.max(0, lim - saldo))}</span></div>` : ''}
@@ -586,8 +606,7 @@ function vResumen(){
   const delMes = D.movimientos.filter(m => (m.fecha||'').startsWith(mes));
   const gastoMes = delMes.filter(m => ['compra','disposicion'].includes(m.tipo))
     .reduce((s,m)=>s+Math.abs(num(m.monto)),0);
-  const abonoMes = delMes.filter(m => (TIPOS[m.tipo]||{}).suma === -1)
-    .reduce((s,m)=>s+Math.abs(num(m.monto)),0);
+  const abonoMes = delMes.filter(esPago).reduce((s,m)=>s+Math.abs(num(m.monto)),0);
   const costoMes = delMes.filter(m => TIPOS_COSTO.includes(m.tipo))
     .reduce((s,m)=>s+Math.abs(num(m.monto)),0);
   const ingresoMes = D.ingresos.filter(i => (i.fecha||'').startsWith(mes))
@@ -686,7 +705,7 @@ function fichaTarjeta(t){
   const movs = movsDe(t.id);
   const cortes = periodosDe(t.id);
   const costo = movs.filter(m => TIPOS_COSTO.includes(m.tipo)).reduce((s,m)=>s+Math.abs(num(m.monto)),0);
-  const abonado = movs.filter(m => (TIPOS[m.tipo]||{}).suma === -1).reduce((s,m)=>s+Math.abs(num(m.monto)),0);
+  const abonado = movs.filter(esPago).reduce((s,m)=>s+Math.abs(num(m.monto)),0);
   const f = proximasFechas(t);
   return `<div class="card">
     <h2><span class="dot" style="background:${t.color}"></span>${esc(t.nombre)}
@@ -696,7 +715,7 @@ function fichaTarjeta(t){
       <button class="btn sm ghost" onclick="formTarjeta('${t.id}')">Editar</button></h2>
     <div class="grid g4">
       ${kpi('Debes hoy', money(saldo), '', saldo>0?'bad':'ok')}
-      ${kpi('Total abonado', money(abonado), `${movs.filter(m=>(TIPOS[m.tipo]||{}).suma===-1).length} abonos`, 'ok')}
+      ${kpi('Total abonado', money(abonado), `${movs.filter(esPago).length} abonos`, 'ok')}
       ${kpi('Te ha costado', money(costo), 'intereses + IVA + comisiones', costo>0?'bad':'')}
       ${kpi('Estados de cuenta', String(cortes.length), cortes.length?`último ${fechaCorta(cortes[0].fechaCorte)}`:'ninguno cargado')}
     </div>
@@ -1088,6 +1107,8 @@ function formPeriodo(id, tarjetaPre){
         <input name="pagoMinimo" value="${p.pagoMinimo??''}" inputmode="decimal" placeholder="0.00"></div>
       <div class="field"><label>Pago para no generar intereses</label>
         <input name="pagoNoIntereses" value="${p.pagoNoIntereses??''}" inputmode="decimal" placeholder="0.00"></div>
+      <div class="field"><label>Saldo a meses (no exigible aún)</label>
+        <input name="saldoDiferido" value="${p.saldoDiferido??''}" inputmode="decimal" placeholder="0.00"></div>
     </div>
     <div class="field"><label>Notas</label>
       <textarea name="nota" placeholder="Ej. cobro de $340 que no reconozco, aclaración folio 12345...">${esc(p.nota||'')}</textarea></div>
@@ -1104,7 +1125,8 @@ function formPeriodo(id, tarjetaPre){
       const obj = {tarjetaId:v.tarjetaId, fechaCorte:v.fechaCorte,
         fechaLimitePago:v.fechaLimitePago || sumaDias(v.fechaCorte, num(tarjeta(v.tarjetaId)?.diasParaPagar)||20),
         saldoAnterior:num(v.saldoAnterior), saldoNuevo:num(v.saldoNuevo),
-        pagoMinimo:num(v.pagoMinimo), pagoNoIntereses:num(v.pagoNoIntereses), nota:v.nota};
+        pagoMinimo:num(v.pagoMinimo), pagoNoIntereses:num(v.pagoNoIntereses),
+        saldoDiferido:num(v.saldoDiferido), nota:v.nota};
       if(id) Object.assign(D.periodos.find(x=>x.id===id), obj);
       else D.periodos.push(Object.assign({id:uid(), creado:hoyISO()}, obj));
       cerrarModal(); refrescar(); aviso(id?'Estado de cuenta actualizado':'Estado de cuenta cargado ✓');
@@ -1219,8 +1241,7 @@ function vAnalisis(){
         cuánto de lo que pagas se lo queda el banco en intereses, IVA y comisiones,
         y cuánto realmente baja tu deuda.`)}</div>`;
 
-  const abonado = D.movimientos.filter(m => (TIPOS[m.tipo]||{}).suma === -1)
-    .reduce((s,m)=>s+Math.abs(num(m.monto)),0);
+  const abonado = D.movimientos.filter(esPago).reduce((s,m)=>s+Math.abs(num(m.monto)),0);
   const costo = D.movimientos.filter(m => TIPOS_COSTO.includes(m.tipo))
     .reduce((s,m)=>s+Math.abs(num(m.monto)),0);
   const compras = D.movimientos.filter(m => ['compra','disposicion'].includes(m.tipo))
@@ -1239,7 +1260,7 @@ function vAnalisis(){
     const ms = movsDe(t.id);
     return {t,
       costo: ms.filter(m => TIPOS_COSTO.includes(m.tipo)).reduce((s,m)=>s+Math.abs(num(m.monto)),0),
-      abonado: ms.filter(m => (TIPOS[m.tipo]||{}).suma === -1).reduce((s,m)=>s+Math.abs(num(m.monto)),0),
+      abonado: ms.filter(esPago).reduce((s,m)=>s+Math.abs(num(m.monto)),0),
       saldo: saldoTarjeta(t.id)};
   }).sort((a,b) => b.costo - a.costo);
 
@@ -1415,7 +1436,7 @@ function exportarCSV(){
   ordenados(D.movimientos).forEach(m => filas.push([
     m.fecha, nomTarjeta(m.tarjetaId), m.descripcion||'', m.categoria||'',
     (TIPOS[m.tipo]||{}).etiqueta || m.tipo, Math.abs(num(m.monto)).toFixed(2),
-    (TIPOS[m.tipo]||{}).suma > 0 ? 'cargo' : 'abono', m.msi||'', m.nota||'']));
+    (TIPOS[m.tipo]||{}).suma > 0 ? 'cargo' : (esPago(m) ? 'abono' : 'ajuste'), m.msi||'', m.nota||'']));
   const csv = '﻿' + filas.map(f => f.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
@@ -1498,7 +1519,8 @@ function aplicarLote(lote){
     const obj = {tarjetaId:t.id, fechaCorte:p.fechaCorte,
       fechaLimitePago: p.fechaLimitePago || sumaDias(p.fechaCorte, num(t.diasParaPagar)||20),
       saldoAnterior:num(p.saldoAnterior), saldoNuevo:num(p.saldoNuevo),
-      pagoMinimo:num(p.pagoMinimo), pagoNoIntereses:num(p.pagoNoIntereses), nota:p.nota||''};
+      pagoMinimo:num(p.pagoMinimo), pagoNoIntereses:num(p.pagoNoIntereses),
+      saldoDiferido:num(p.saldoDiferido), nota:p.nota||''};
     if(ya) Object.assign(ya, obj);
     else { D.periodos.push(Object.assign({id:uid(), creado:hoyISO()}, obj)); nuevosCortes++; }
   }
