@@ -152,6 +152,58 @@ textarea{min-height:70px;resize:vertical;font-size:13px}
 .leg b{color:var(--tx)}
 .mini{height:7px;background:var(--panel-2);border-radius:4px;overflow:hidden}
 .mini i{display:block;height:100%;border-radius:4px}
+/* Paleta de gráficas: valores validados para contraste y daltonismo en ambos
+   modos. Se definen como tokens para que el modo oscuro se cambie en un solo
+   lugar y las gráficas se escriban contra el rol, no contra el hex. */
+:root{ --serie1:#2a78d6; --critico:#d03b3b; --pista:#eef0f3; }
+@media (prefers-color-scheme:dark){ :root{ --serie1:#3987e5; --critico:#d03b3b; --pista:#262c35; } }
+
+/* Secciones plegables */
+details.card>summary{cursor:pointer;font-size:15px;font-weight:650;letter-spacing:-.01em;
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;list-style:none}
+details.card>summary::-webkit-details-marker{display:none}
+details.card>summary::before{content:'▸';color:var(--tx-3);font-size:12px;transition:transform .15s}
+details.card[open]>summary::before{transform:rotate(90deg)}
+details.card>summary:hover{color:var(--acc)}
+details.card>summary .sub{font-weight:500}
+
+/* Barras horizontales */
+.chart{margin-top:4px}
+.brow{display:grid;grid-template-columns:minmax(90px,190px) 1fr auto;gap:12px;align-items:center;
+  padding:5px 0;border-radius:6px}
+.brow:hover,.brow:focus-visible{background:var(--panel-2);outline:none}
+.brow:focus-visible{box-shadow:0 0 0 2px var(--acc)}
+.blab{font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.btrack{height:20px;background:var(--pista);border-radius:5px;overflow:hidden}
+.btrack i{display:block;height:100%;border-radius:0 5px 5px 0;min-width:3px;transition:width .25s}
+.bval{font-family:var(--mono);font-size:12.5px;font-variant-numeric:tabular-nums;white-space:nowrap;
+  min-width:88px;text-align:right}
+
+/* Columnas apiladas */
+.leyenda{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--tx-2);margin-bottom:16px}
+.leyenda span{display:flex;align-items:center;gap:6px}
+.leyenda i{width:11px;height:11px;border-radius:3px;display:inline-block}
+.cols{display:flex;gap:10px;align-items:flex-end;overflow-x:auto;padding-bottom:4px;min-height:250px}
+.col{flex:1;min-width:56px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end}
+.cval{font-family:var(--mono);font-size:11px;color:var(--tx-2);margin-bottom:5px;white-space:nowrap;
+  font-variant-numeric:tabular-nums}
+.cstack{width:100%;max-width:74px;display:flex;flex-direction:column-reverse;border-radius:5px 5px 0 0;
+  overflow:hidden;min-height:3px}
+/* 2px de separación entre segmentos: el borde es del color de la superficie */
+.cstack i{width:100%;box-shadow:0 -2px 0 var(--panel);cursor:default}
+.cstack i:first-child{box-shadow:none}
+.cstack i:focus-visible{outline:2px solid var(--tx);outline-offset:-2px}
+.clab{font-size:11.5px;color:var(--tx-2);margin-top:7px;white-space:nowrap}
+
+/* Tooltip compartido */
+#tip{position:fixed;background:var(--tx);color:var(--bg);padding:7px 11px;border-radius:7px;
+  font-size:12.5px;pointer-events:none;z-index:300;opacity:0;transition:opacity .12s;max-width:280px;
+  box-shadow:0 4px 16px rgba(0,0,0,.25);line-height:1.45}
+#tip.on{opacity:1}
+
+select.cat{padding:5px 8px;font-size:13px;border-radius:6px;min-width:135px}
+select.cat:not([value=""]){border-color:var(--line)}
+
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--tx);color:var(--bg);
   padding:11px 20px;border-radius:9px;font-size:14px;font-weight:550;z-index:200;box-shadow:0 6px 22px rgba(0,0,0,.28);
   opacity:0;pointer-events:none;transition:opacity .18s;max-width:88vw;text-align:center}
@@ -169,6 +221,14 @@ pre{font-family:var(--mono);font-size:12px;background:var(--panel-2);padding:12p
   .tw td,.tw th{white-space:nowrap}
   .tw td .sub{white-space:nowrap}
   .filtros .field{min-width:120px}
+  /* En pantalla chica la etiqueta se comía el ancho y la barra quedaba en un
+     muñón. Etiqueta y monto arriba; la barra abajo, a todo lo ancho. */
+  .brow{grid-template-columns:1fr auto;grid-template-areas:"lab val" "track track";gap:2px 10px;
+    padding:7px 0}
+  .blab{grid-area:lab;white-space:normal}
+  .bval{grid-area:val;min-width:0}
+  .btrack{grid-area:track;height:14px}
+  .btrack i{border-radius:0 4px 4px 0}
 }
 </style>
 </head>
@@ -182,6 +242,7 @@ pre{font-family:var(--mono);font-size:12px;background:var(--panel-2);padding:12p
       <button data-t="resumen" class="on">Resumen</button>
       <button data-t="tarjetas">Tarjetas</button>
       <button data-t="movs">Movimientos</button>
+      <button data-t="gastos">En qué gasto</button>
       <button data-t="cortes">Estados de cuenta</button>
       <button data-t="ingresos">Ingresos</button>
       <button data-t="analisis">¿Por qué no baja?</button>
@@ -194,6 +255,7 @@ pre{font-family:var(--mono);font-size:12px;background:var(--panel-2);padding:12p
   <section id="tab-resumen"></section>
   <section id="tab-tarjetas" class="hide"></section>
   <section id="tab-movs" class="hide"></section>
+  <section id="tab-gastos" class="hide"></section>
   <section id="tab-cortes" class="hide"></section>
   <section id="tab-ingresos" class="hide"></section>
   <section id="tab-analisis" class="hide"></section>
@@ -209,6 +271,7 @@ pre{font-family:var(--mono);font-size:12px;background:var(--panel-2);padding:12p
 </div>
 
 <div class="toast" id="toast"></div>
+<div id="tip"></div>
 
 <script>
 /* ==========================================================================
@@ -243,8 +306,16 @@ const esPago = m => !!(TIPOS[m.tipo] || {}).pago;
 const bajaSaldo = m => (TIPOS[m.tipo] || {}).suma === -1;
 /* Lo que el banco te cobra por deber dinero: esto es lo que hace que no baje la deuda. */
 const TIPOS_COSTO = ['interes','iva','comision','anualidad'];
-const CATEGORIAS = ['Súper','Comida','Gasolina','Transporte','Servicios','Suscripciones',
-  'Salud','Ropa','Hogar','Entretenimiento','Educación','Negocio','Viajes','Efectivo','Otros'];
+const CATS_BASE = ['Súper','Comida','Gasolina','Transporte','Servicios','Suscripciones',
+  'Salud','Ropa','Hogar','Ferretería','Mascota','Entretenimiento','Educación','Negocio',
+  'Viajes','Efectivo','Otros'];
+/* Las categorías base más las que tú agregues. */
+function CATEGORIAS(){
+  return [...new Set([...CATS_BASE, ...(D.categorias||[])])].sort((a,b)=>a.localeCompare(b,'es'));
+}
+/* Clave con la que se recuerda a qué categoría pertenece un concepto.
+   El banco escribe el mismo comercio con variaciones de espacios y mayúsculas. */
+const claveConcepto = c => String(c||'').toUpperCase().replace(/\s+/g,' ').trim();
 
 let D = cargar();       // estado completo
 let tabActual = 'resumen';
@@ -252,6 +323,8 @@ let tabActual = 'resumen';
 /* ---------- Persistencia ---------- */
 function estadoVacio(){
   return {version:1, tarjetas:[], movimientos:[], periodos:[], ingresos:[],
+          categorias:[],   // las que tú agregas
+          reglas:{},       // concepto -> categoría, para no volver a clasificarlo a mano
           creado:hoyISO(), actualizado:hoyISO()};
 }
 function cargar(){
@@ -472,7 +545,7 @@ function interesEstimado(t, saldo){
 /* ==========================================================================
    Navegación y ventanas modales
    ========================================================================== */
-const TABS = ['resumen','tarjetas','movs','cortes','ingresos','analisis','datos'];
+const TABS = ['resumen','tarjetas','movs','gastos','cortes','ingresos','analisis','datos'];
 
 function ir(t){
   tabActual = t;
@@ -530,8 +603,81 @@ function opciones(lista, sel, vacio){
 const selTarjetas = (sel, vacio) =>
   opciones(D.tarjetas.map(t => ({v:t.id, t:t.nombre})), sel, vacio);
 
+/* ==========================================================================
+   Categorías: asignación manual y reglas que se recuerdan
+   ========================================================================== */
+
+/* Cuántos movimientos comparten un concepto. */
+function movsDelConcepto(concepto){
+  const k = claveConcepto(concepto);
+  return D.movimientos.filter(m => claveConcepto(m.descripcion) === k);
+}
+/* Aplica una categoría a un solo movimiento. */
+function ponerCategoria(id, cat){
+  const m = D.movimientos.find(x => x.id === id);
+  if(!m) return;
+  m.categoria = cat;
+  guardar();
+}
+/* Aplica una categoría a todos los movimientos de un concepto y guarda la regla
+   para que las próximas importaciones ya lleguen clasificadas. */
+function aplicarAConcepto(concepto, cat){
+  const k = claveConcepto(concepto);
+  let n = 0;
+  D.movimientos.forEach(m => { if(claveConcepto(m.descripcion) === k){ m.categoria = cat; n++; } });
+  if(cat) D.reglas[k] = cat; else delete D.reglas[k];
+  guardar();
+  return n;
+}
+/* Pide el nombre de una categoría nueva y la registra. */
+function nuevaCategoria(alGuardar){
+  modal('Nueva categoría', `
+    <div class="field"><label>Nombre de la categoría</label>
+      <input name="nombre" placeholder="Ej. Ferretería, Mascota, Negocio" maxlength="28"></div>
+    <p class="sub" style="margin:0">Se agrega a la lista y queda disponible para todos tus movimientos.</p>
+  `, [{texto:'Cancelar', accion:cerrarModal},
+      {texto:'Agregar', clase:'', accion:()=>{
+        const v = leerForm().nombre.trim();
+        if(!v) return aviso('Escribe un nombre');
+        if(!CATEGORIAS().includes(v)){ D.categorias = [...(D.categorias||[]), v]; guardar(); }
+        cerrarModal(); alGuardar(v);
+      }}]);
+}
+
+/* El <select> de categoría que aparece en cada fila de movimientos. */
+function selectorCategoria(m){
+  const opts = opciones(CATEGORIAS(), m.categoria || '', 'Sin categoría');
+  return `<select class="cat" data-id="${m.id}" data-con="${esc(m.descripcion||'')}"
+    onchange="cambioCategoria(this)">${opts}<option value="__nueva">＋ Nueva categoría…</option></select>`;
+}
+
+/* Al cambiar una categoría, si el concepto se repite ofrecemos aplicarla a
+   todos: son 7 movimientos de "MERPAGO*MARIANOJAIRGU", no siete decisiones. */
+function cambioCategoria(el){
+  const id = el.dataset.id, concepto = el.dataset.con, cat = el.value;
+  if(cat === '__nueva'){
+    const previa = (D.movimientos.find(x=>x.id===id)||{}).categoria || '';
+    el.value = previa;
+    nuevaCategoria(nom => { el.value = nom; cambioCategoria(el); });
+    return;
+  }
+  const hermanos = movsDelConcepto(concepto).filter(x => x.id !== id);
+  if(hermanos.length === 0 || !cat){ ponerCategoria(id, cat); render(); return; }
+  ponerCategoria(id, cat);
+  modal('Aplicar a todo el concepto', `
+    <p style="margin:0 0 14px;line-height:1.6">Tienes <b>${hermanos.length + 1} movimientos</b> de
+      <b>${esc(concepto)}</b>, por <b>${money(movsDelConcepto(concepto).reduce((s,x)=>s+num(x.monto),0))}</b>.</p>
+    <div class="aviso azul" style="margin:0">Si los clasificas todos como <b>${esc(cat)}</b>, además guardo
+      la regla: los próximos estados de cuenta que traigan este concepto llegarán ya clasificados.</div>
+  `, [{texto:'Sólo éste', accion:()=>{ cerrarModal(); render(); }},
+      {texto:`Los ${hermanos.length + 1}`, clase:'', accion:()=>{
+        const n = aplicarAConcepto(concepto, cat);
+        cerrarModal(); render(); aviso(`${n} movimientos clasificados como ${cat} ✓`);
+      }}]);
+}
+
 function render(){
-  const f = {resumen:vResumen, tarjetas:vTarjetas, movs:vMovs, cortes:vCortes,
+  const f = {resumen:vResumen, tarjetas:vTarjetas, movs:vMovs, gastos:vGastos, cortes:vCortes,
              ingresos:vIngresos, analisis:vAnalisis, datos:vDatos}[tabActual];
   if(f) $('tab-'+tabActual).innerHTML = f();
 }
@@ -815,14 +961,18 @@ function borrarTarjeta(id){
    ========================================================================== */
 let filtros = {tarjeta:'', tipo:'', mes:'', cat:'', texto:''};
 
-function filaMov(m){
+function filaMov(m, conCategoria){
   const t = TIPOS[m.tipo] || TIPOS.compra;
   const signo = t.suma > 0 ? '+' : '−';
+  /* Sólo las compras se categorizan: un interés o un abono no son "gasto en algo". */
+  const editable = conCategoria && ['compra','disposicion'].includes(m.tipo);
   return `<tr>
     <td style="white-space:nowrap">${fechaCorta(m.fecha)}</td>
     <td>${esc(m.descripcion||'(sin concepto)')}
       ${m.msi ? `<span class="tag azul">${esc(m.msi)} MSI</span>` : ''}
-      ${m.categoria ? `<div class="sub">${esc(m.categoria)}</div>` : ''}</td>
+      ${!conCategoria && m.categoria ? `<div class="sub">${esc(m.categoria)}</div>` : ''}</td>
+    ${conCategoria ? `<td>${editable ? selectorCategoria(m)
+        : `<span class="sub">—</span>`}</td>` : ''}
     <td><span class="dot" style="background:${colTarjeta(m.tarjetaId)}"></span>${esc(nomTarjeta(m.tarjetaId))}</td>
     <td><span class="tag ${t.clase}">${t.etiqueta}</span></td>
     <td class="num ${t.suma>0?'neg':'pos'}">${signo} ${money(m.monto)}</td>
@@ -841,7 +991,9 @@ function vMovs(){
     (!filtros.tarjeta || m.tarjetaId === filtros.tarjeta) &&
     (!filtros.tipo    || m.tipo === filtros.tipo) &&
     (!filtros.mes     || (m.fecha||'').startsWith(filtros.mes)) &&
-    (!filtros.cat     || m.categoria === filtros.cat) &&
+    (!filtros.cat     || (filtros.cat === '__sin'
+                          ? !m.categoria && ['compra','disposicion'].includes(m.tipo)
+                          : m.categoria === filtros.cat)) &&
     (!filtros.texto   || (m.descripcion||'').toLowerCase().includes(filtros.texto.toLowerCase())));
   lista = ordenados(lista);
 
@@ -860,6 +1012,11 @@ function vMovs(){
     <h2>Movimientos <span class="sub">${lista.length} de ${D.movimientos.length}</span><span class="sp"></span>
       <button class="btn sm" onclick="formMovimiento()">+ Movimiento</button>
       <button class="btn sm ghost" onclick="ir('datos')">Cargar estado de cuenta</button></h2>
+    ${(()=>{ const p = pendientes();
+      return p.movs ? `<div class="aviso ambar">🟡 Te faltan <b>${p.movs} movimientos</b> por
+        clasificar (<b>${money(p.monto)}</b>), pero son sólo <b>${p.conceptos.length} conceptos
+        distintos</b>. <button class="btn sm" style="margin-left:6px"
+        onclick="ir('gastos')">Clasificarlos de golpe</button></div>` : ''; })()}
     <div class="filtros">
       <div class="field"><label>Tarjeta</label><select onchange="filtros.tarjeta=this.value;render()">
         ${selTarjetas(filtros.tarjeta, 'Todas')}</select></div>
@@ -868,7 +1025,7 @@ function vMovs(){
       <div class="field"><label>Mes</label><select onchange="filtros.mes=this.value;render()">
         ${opciones(meses.map(m=>({v:m,t:mesLargo(m)})), filtros.mes, 'Todos')}</select></div>
       <div class="field"><label>Categoría</label><select onchange="filtros.cat=this.value;render()">
-        ${opciones(CATEGORIAS, filtros.cat, 'Todas')}</select></div>
+        ${opciones([{v:'__sin', t:'⚠ Sin categoría'}, ...CATEGORIAS()], filtros.cat, 'Todas')}</select></div>
       <div class="field" style="flex:1;min-width:170px"><label>Buscar concepto</label>
         <input value="${esc(filtros.texto)}" placeholder="Ej. Oxxo" oninput="filtros.texto=this.value;clearTimeout(window._b);window._b=setTimeout(render,320)"></div>
       ${Object.values(filtros).some(Boolean) ? `<button class="btn sm ghost" onclick="filtros={tarjeta:'',tipo:'',mes:'',cat:'',texto:''};render()">Limpiar</button>` : ''}
@@ -879,8 +1036,9 @@ function vMovs(){
       ${kpi('Neto', money(Math.abs(cargos-abonos)), cargos-abonos>0?'tu deuda creció':'tu deuda bajó', cargos-abonos>0?'bad':'ok')}
     </div>
     ${lista.length ? `<div class="tw"><table>
-      <thead><tr><th>Fecha</th><th>Concepto</th><th>Tarjeta</th><th>Tipo</th><th class="num">Monto</th><th></th></tr></thead>
-      <tbody>${lista.map(filaMov).join('')}</tbody></table></div>`
+      <thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Tarjeta</th><th>Tipo</th>
+        <th class="num">Monto</th><th></th></tr></thead>
+      <tbody>${lista.map(m => filaMov(m, true)).join('')}</tbody></table></div>`
       : vacioMsg('No hay movimientos con esos filtros.')}
   </div>
   ${cats.length ? `<div class="card"><h2>En qué se te fue el dinero <span class="sub">según los filtros de arriba</span></h2>
@@ -911,7 +1069,7 @@ function formMovimiento(id, tarjetaPre){
     </div>
     <div class="fgrid">
       <div class="field"><label>Categoría</label><select name="categoria">
-        ${opciones(CATEGORIAS, m.categoria||'', 'Sin categoría')}</select></div>
+        ${opciones(CATEGORIAS(), m.categoria||'', 'Sin categoría')}</select></div>
       <div class="field"><label>Meses sin intereses</label>
         <input name="msi" value="${esc(m.msi||'')}" placeholder="Ej. 3 de 12"></div>
     </div>
@@ -1379,6 +1537,229 @@ function vAnalisis(){
 
 <script>
 /* ==========================================================================
+   VISTA: Gastos — en qué categoría se te va el dinero
+   Gráficas en SVG puro, sin librerías.
+   ========================================================================== */
+
+/* Paleta categórica validada (contraste, daltonismo y modo oscuro).
+   El orden es el mecanismo de seguridad: no se cicla ni se generan tonos. */
+const SERIES = ['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300'];
+const SERIES_OSC = ['#3987e5','#d95926','#199e70','#c98500','#d55181','#008300'];
+const AZUL = '#2a78d6', AZUL_OSC = '#3987e5';
+const CRITICO = '#d03b3b';   /* color de estado: reservado para el costo del banco */
+const esOscuro = () => matchMedia('(prefers-color-scheme: dark)').matches;
+const serie = i => (esOscuro() ? SERIES_OSC : SERIES)[i % 6];
+
+/* Conceptos de compra que todavía no tienen categoría. */
+function pendientes(){
+  const compras = D.movimientos.filter(m => ['compra','disposicion'].includes(m.tipo) && !m.categoria);
+  const porConcepto = {};
+  compras.forEach(m => {
+    const k = claveConcepto(m.descripcion) || '(sin concepto)';
+    (porConcepto[k] = porConcepto[k] || {concepto:m.descripcion||'(sin concepto)', monto:0, n:0});
+    porConcepto[k].monto += Math.abs(num(m.monto));
+    porConcepto[k].n++;
+  });
+  return {movs: compras.length,
+          monto: compras.reduce((s,m)=>s+Math.abs(num(m.monto)),0),
+          conceptos: Object.values(porConcepto).sort((a,b)=>b.monto-a.monto)};
+}
+
+let fGastos = {tarjeta:'', mes:''};
+let abiertoClasificar = true;   // la primera vez conviene verlo abierto
+let verClasificar = 12;         // cuántos conceptos se listan de golpe
+
+function vGastos(){
+  if(!D.movimientos.length)
+    return `<div class="card"><h2>En qué gastas</h2>
+      ${vacioMsg('Carga movimientos y aquí verás en qué categoría se te va el dinero.')}</div>`;
+
+  const meses = [...new Set(D.movimientos.map(m => (m.fecha||'').slice(0,7)).filter(Boolean))].sort().reverse();
+  const enFiltro = m => (!fGastos.tarjeta || m.tarjetaId === fGastos.tarjeta) &&
+                        (!fGastos.mes || (m.fecha||'').startsWith(fGastos.mes));
+  const movs = D.movimientos.filter(enFiltro);
+  const compras = movs.filter(m => ['compra','disposicion'].includes(m.tipo));
+  const costo = movs.filter(m => TIPOS_COSTO.includes(m.tipo))
+    .reduce((s,m)=>s+Math.abs(num(m.monto)),0);
+
+  /* Gasto por categoría, más el costo del banco como su propia fila. */
+  const porCat = {};
+  compras.forEach(m => { const c = m.categoria || 'Sin clasificar';
+    (porCat[c] = porCat[c] || {monto:0, n:0}); porCat[c].monto += Math.abs(num(m.monto)); porCat[c].n++; });
+  let filas = Object.entries(porCat).map(([cat,v]) => ({cat, ...v, banco:false}));
+  if(costo > 0) filas.push({cat:'Intereses y comisiones', monto:costo, banco:true,
+    n: movs.filter(m => TIPOS_COSTO.includes(m.tipo)).length});
+  filas.sort((a,b) => b.monto - a.monto);
+  const total = filas.reduce((s,f)=>s+f.monto, 0);
+  const gastoCompras = compras.reduce((s,m)=>s+Math.abs(num(m.monto)),0);
+  /* "Sin clasificar" no es una categoría: es trabajo pendiente. */
+  const top = filas.find(f => !f.banco && f.cat !== 'Sin clasificar');
+  const pend = pendientes();
+
+  /* Meses reales cubiertos, para el promedio mensual. */
+  const nMeses = fGastos.mes ? 1 : Math.max(1, new Set(movs.map(m=>(m.fecha||'').slice(0,7)).filter(Boolean)).size);
+
+  return `
+  <div class="card"><h2>En qué gastas <span class="sp"></span>
+    <select style="width:auto" onchange="fGastos.tarjeta=this.value;render()">
+      ${selTarjetas(fGastos.tarjeta, 'Todas las tarjetas')}</select>
+    <select style="width:auto" onchange="fGastos.mes=this.value;render()">
+      ${opciones(meses.map(m=>({v:m,t:mesLargo(m)})), fGastos.mes, 'Todo el histórico')}</select>
+  </h2>
+  <div class="grid g4">
+    ${kpi('Gasto en compras', money(gastoCompras), `${compras.length} cargos en ${nMeses} mes(es)`)}
+    ${kpi('Tu categoría #1', top ? esc(top.cat) : '—',
+      top ? `${money(top.monto)} · ${pct(top.monto/total)} de todo` : '', 'warn')}
+    ${kpi('Costo del banco', money(costo), costo>0?`${pct(costo/total)} de todo lo que sale`:'sin intereses', costo>0?'bad':'ok')}
+    ${kpi('Promedio mensual', money(total/nMeses), 'compras + intereses')}
+  </div>
+  </div>
+
+  ${pend.movs ? `<details class="card" ${abiertoClasificar ? 'open' : ''} ontoggle="abiertoClasificar=this.open">
+    <summary><span>⚠️ Por clasificar</span>
+      <span class="sub">${pend.conceptos.length} conceptos · ${pend.movs} movimientos · ${money(pend.monto)}</span>
+    </summary>
+    <p class="sub" style="margin:14px 0;max-width:720px">Ordenados por lo que más pesa. Elige la
+    categoría de cada concepto y se aplica a <b>todos</b> sus movimientos de golpe. Además guardo la
+    regla: el próximo estado de cuenta que traiga ese concepto ya llegará clasificado.</p>
+    <div class="tw"><table>
+      <thead><tr><th>Concepto</th><th class="num">Movs</th><th class="num">Monto</th><th style="width:190px">Categoría</th></tr></thead>
+      <tbody>${pend.conceptos.slice(0, verClasificar).map(c => `<tr>
+        <td>${esc(c.concepto)}</td>
+        <td class="num">${c.n}</td>
+        <td class="num">${money(c.monto)}</td>
+        <td><select data-con="${esc(c.concepto)}" onchange="clasificarConcepto(this)">
+          ${opciones(CATEGORIAS(), '', 'Elegir…')}<option value="__nueva">＋ Nueva categoría…</option>
+        </select></td></tr>`).join('')}</tbody></table></div>
+    ${pend.conceptos.length > verClasificar ? `<button class="btn sm ghost" style="margin-top:12px"
+      onclick="verClasificar += 25; render()">Ver ${Math.min(25, pend.conceptos.length - verClasificar)} más
+      (faltan ${pend.conceptos.length - verClasificar})</button>` : ''}
+  </details>` : `<div class="card"><div class="aviso verde" style="margin:0">✅ Todos tus movimientos
+    están clasificados. Cuando importes un estado de cuenta nuevo, los conceptos que ya conozco
+    llegarán categorizados solos.</div></div>`}
+
+  ${filas.length ? `<div class="card"><h2>Gasto por categoría</h2>
+    ${barrasCategorias(filas, total)}
+    <div class="tw" style="margin-top:18px"><table>
+      <thead><tr><th>Categoría</th><th class="num">Monto</th><th class="num">% del total</th>
+        <th class="num">Movs</th><th class="num">Promedio</th><th class="num">Al mes</th></tr></thead>
+      <tbody>${filas.map(f => `<tr>
+        <td>${f.banco ? '⚠️ ' : `<span class="dot" style="background:${AZUL}"></span>`}${esc(f.cat)}</td>
+        <td class="num ${f.banco?'neg':''}">${money(f.monto)}</td>
+        <td class="num">${pct(f.monto/total)}</td>
+        <td class="num">${f.n}</td>
+        <td class="num">${money(f.monto/f.n)}</td>
+        <td class="num">${money(f.monto/nMeses)}</td></tr>`).join('')}
+        <tr><td><b>Total</b></td><td class="num"><b>${money(total)}</b></td><td class="num">100%</td>
+          <td class="num"><b>${filas.reduce((s,f)=>s+f.n,0)}</b></td><td></td>
+          <td class="num"><b>${money(total/nMeses)}</b></td></tr>
+      </tbody></table></div>
+  </div>` : ''}
+
+  ${!fGastos.mes && meses.length > 1 ? `<div class="card">
+    <h2>Cómo cambia mes a mes</h2>
+    ${columnasMensuales(D.movimientos.filter(m => !fGastos.tarjeta || m.tarjetaId === fGastos.tarjeta))}
+  </div>` : ''}
+
+  ${(()=>{ const porCom = {};
+    compras.forEach(m => { const k = claveConcepto(m.descripcion);
+      (porCom[k] = porCom[k] || {c:m.descripcion, monto:0, n:0, cat:m.categoria});
+      porCom[k].monto += Math.abs(num(m.monto)); porCom[k].n++; });
+    const lista = Object.values(porCom).sort((a,b)=>b.monto-a.monto).slice(0,15);
+    return lista.length ? `<div class="card"><h2>Dónde gastas más <span class="sub">top 15 comercios</span></h2>
+      <div class="tw"><table>
+        <thead><tr><th>Comercio</th><th>Categoría</th><th class="num">Veces</th>
+          <th class="num">Total</th><th class="num">Promedio</th></tr></thead>
+        <tbody>${lista.map(x => `<tr>
+          <td>${esc(x.c)}</td>
+          <td>${x.cat ? `<span class="tag gris">${esc(x.cat)}</span>` : '<span class="sub">sin clasificar</span>'}</td>
+          <td class="num">${x.n}</td><td class="num">${money(x.monto)}</td>
+          <td class="num">${money(x.monto/x.n)}</td></tr>`).join('')}</tbody></table></div>
+    </div>` : ''; })()}`;
+}
+
+/* ── Gráfica 1: barras horizontales, gasto por categoría ───────────────────
+   El trabajo es comparar magnitud, así que un solo tono y la longitud carga
+   el dato. El costo del banco va en color de estado con su icono y etiqueta,
+   porque no es un gasto tuyo: es lo que cuesta deber. */
+function barrasCategorias(filas, total){
+  const max = Math.max(...filas.map(f => f.monto), 1);
+  return `<div class="chart" role="img"
+      aria-label="Gasto por categoría. ${filas.map(f=>`${f.cat}: ${money(f.monto)}`).join('. ')}">
+    ${filas.map(f => {
+      const w = (f.monto / max * 100).toFixed(2);
+      const col = f.banco ? 'var(--critico)' : 'var(--serie1)';
+      return `<div class="brow" tabindex="0"
+          data-tip="${esc(f.cat)} · ${money(f.monto)} · ${pct(f.monto/total)} del total · ${f.n} movimiento${f.n===1?'':'s'}">
+        <div class="blab">${f.banco ? '⚠️ ' : ''}${esc(f.cat)}</div>
+        <div class="btrack"><i style="width:${w}%;background:${col}"></i></div>
+        <div class="bval">${money(f.monto)}</div>
+      </div>`;
+    }).join('')}
+  </div>
+  <p class="sub" style="margin:12px 0 0">Los montos van etiquetados en cada barra y repetidos en la
+  tabla de abajo: el color nunca es lo único que distingue un dato.</p>`;
+}
+
+/* ── Gráfica 2: columnas apiladas por mes ──────────────────────────────────
+   Cinco categorías principales más "Otros": seis series es el tope al que la
+   paleta sigue siendo distinguible con daltonismo. */
+function columnasMensuales(movs){
+  const compras = movs.filter(m => ['compra','disposicion'].includes(m.tipo));
+  const meses = [...new Set(compras.map(m => (m.fecha||'').slice(0,7)).filter(Boolean))].sort().slice(-12);
+  if(meses.length < 2) return '<p class="sub">Necesitas al menos dos meses con movimientos.</p>';
+
+  const tot = {};
+  compras.forEach(m => { const c = m.categoria || 'Sin clasificar';
+    tot[c] = (tot[c]||0) + Math.abs(num(m.monto)); });
+  const top = Object.entries(tot).sort((a,b)=>b[1]-a[1]).slice(0,5).map(x => x[0]);
+  const cats = [...top, 'Otros'];
+
+  const datos = meses.map(ym => {
+    const fila = {mes:ym, vals:{}, total:0};
+    cats.forEach(c => fila.vals[c] = 0);
+    compras.filter(m => (m.fecha||'').startsWith(ym)).forEach(m => {
+      const c = m.categoria || 'Sin clasificar';
+      const dest = top.includes(c) ? c : 'Otros';
+      fila.vals[dest] += Math.abs(num(m.monto)); fila.total += Math.abs(num(m.monto));
+    });
+    return fila;
+  });
+  const max = Math.max(...datos.map(d => d.total), 1);
+
+  return `<div class="leyenda">${cats.map((c,i) =>
+      `<span><i style="background:${serie(i)}"></i>${esc(c)}</span>`).join('')}</div>
+    <div class="cols" role="img" aria-label="Gasto por categoría en cada mes. ${
+      datos.map(d=>`${mesLargo(d.mes)}: ${money(d.total)}`).join('. ')}">
+      ${datos.map(d => `<div class="col">
+        <div class="cval">${money(d.total)}</div>
+        <div class="cstack" style="height:${Math.max(28, d.total/max*210).toFixed(0)}px">
+          ${cats.map((c,i) => d.vals[c] > 0 ? `<i style="flex:${d.vals[c]};background:${serie(i)}"
+              tabindex="0" data-tip="${mesLargo(d.mes)} · ${esc(c)} · ${money(d.vals[c])} · ${pct(d.vals[c]/d.total)} del mes"
+              aria-label="${mesLargo(d.mes)}, ${esc(c)}, ${money(d.vals[c])}"></i>` : '').join('')}
+        </div>
+        <div class="clab">${mesLargo(d.mes).replace(' 20',' ')}</div>
+      </div>`).join('')}
+    </div>
+    <div class="tw" style="margin-top:16px"><table>
+      <thead><tr><th>Mes</th>${cats.map(c=>`<th class="num">${esc(c)}</th>`).join('')}<th class="num">Total</th></tr></thead>
+      <tbody>${datos.slice().reverse().map(d => `<tr><td>${mesLargo(d.mes)}</td>
+        ${cats.map(c=>`<td class="num">${d.vals[c]?money(d.vals[c]):'—'}</td>`).join('')}
+        <td class="num"><b>${money(d.total)}</b></td></tr>`).join('')}</tbody></table></div>`;
+}
+
+function clasificarConcepto(el){
+  const concepto = el.dataset.con, cat = el.value;
+  if(!cat) return;
+  if(cat === '__nueva'){ el.value=''; nuevaCategoria(nom => { el.value = nom; clasificarConcepto(el); }); return; }
+  const n = aplicarAConcepto(concepto, cat);
+  render();
+  aviso(`${n} movimiento${n===1?'':'s'} de ${concepto} → ${cat} ✓`);
+}
+</script>
+
+<script>
+/* ==========================================================================
    VISTA: Datos — respaldo, importación y carga de estados de cuenta
    ========================================================================== */
 function vDatos(){
@@ -1537,11 +1918,13 @@ function aplicarLote(lote){
     const monto = Math.abs(num(m.monto));
     if(!fecha || !monto) return;
     const tipo = TIPOS[m.tipo] ? m.tipo : (num(m.monto) < 0 ? 'abono' : 'compra');
+    /* Si ya clasificaste este concepto antes, la importación lo respeta. */
+    const cat = m.categoria || D.reglas[claveConcepto(m.descripcion)] || '';
     const k = clave({fecha, monto, descripcion:m.descripcion});
     vistos[k] = (vistos[k]||0) + 1;
     if(vistos[k] <= (yaHay[k]||0)){ repetidos++; return; }
     D.movimientos.push({id:uid(), tarjetaId:t.id, fecha, descripcion:m.descripcion||'',
-      tipo, monto, categoria:m.categoria||'', msi:m.msi||'', nota:m.nota||'',
+      tipo, monto, categoria:cat, msi:m.msi||'', nota:m.nota||'',
       corte: m.corte || (p && p.fechaCorte) || '', creado:new Date().toISOString()});
     nuevosMovs++;
   });
@@ -1629,6 +2012,34 @@ function borrarTodo(){
      Esto <b>no se puede deshacer</b>. ¿Ya exportaste tu respaldo?`,
     () => { D = estadoVacio(); refrescar(); ir('resumen'); aviso('Todo borrado'); });
 }
+
+/* ---------- Tooltip de las gráficas ----------
+   Un solo listener delegado: sirve para las barras, las columnas y cualquier
+   cosa que lleve data-tip, sin registrar un manejador por elemento. */
+(function(){
+  const tip = $('tip');
+  const mostrar = (el, x, y) => {
+    tip.textContent = el.dataset.tip;
+    tip.classList.add('on');
+    const r = tip.getBoundingClientRect();
+    tip.style.left = Math.min(Math.max(8, x - r.width/2), innerWidth - r.width - 8) + 'px';
+    tip.style.top  = (y - r.height - 12 < 8 ? y + 18 : y - r.height - 12) + 'px';
+  };
+  const ocultar = () => tip.classList.remove('on');
+  document.addEventListener('mousemove', e => {
+    const el = e.target.closest('[data-tip]');
+    if(el) mostrar(el, e.clientX, e.clientY); else ocultar();
+  });
+  /* Con teclado el tooltip también aparece: la gráfica es navegable con tab. */
+  document.addEventListener('focusin', e => {
+    const el = e.target.closest('[data-tip]');
+    if(!el) return ocultar();
+    const r = el.getBoundingClientRect();
+    mostrar(el, r.left + r.width/2, r.top);
+  });
+  document.addEventListener('focusout', ocultar);
+  addEventListener('scroll', ocultar, true);
+})();
 
 /* ---------- Arranque ---------- */
 render();

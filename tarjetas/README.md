@@ -79,6 +79,36 @@ marca la diferencia exacta en rojo. Ahí tienes dos posibilidades:
 
 Da clic en 🔍 para ver el desglose completo, línea por línea.
 
+### "¿En qué categoría estoy gastando más?"
+La pestaña **En qué gasto** es el tablero: cuánto llevas gastado, cuál es tu
+categoría número uno, cuánto te cuesta el banco y tu promedio mensual. Debajo,
+una gráfica de barras con el gasto por categoría —los intereses y comisiones
+aparecen como su propia barra, marcados en rojo, porque no son un gasto tuyo
+sino lo que cuesta deber— y una gráfica de columnas con cómo cambia mes a mes.
+Cada gráfica trae su tabla con los mismos números.
+
+Puedes filtrar por tarjeta y por mes.
+
+### Clasificar los movimientos
+Muchos conceptos se categorizan solos (un `UBER EATS` es Comida). Otros traen
+texto que sólo tú entiendes, y ésos los clasificas a mano de dos maneras:
+
+- **Uno por uno:** en *Movimientos*, cada compra trae un selector de categoría
+  en su fila. Lo cambias y se guarda solo.
+- **Todos los de un concepto de golpe:** en *En qué gasto → Por clasificar*
+  tienes la lista de conceptos pendientes ordenada por lo que más pesa. Eliges
+  la categoría de un concepto y se aplica a **todos** sus movimientos.
+
+En los dos casos, cuando clasificas un concepto **se guarda la regla**: el
+próximo estado de cuenta que traiga ese mismo concepto llegará ya clasificado.
+Así el trabajo se hace una sola vez.
+
+Si te faltan categorías, cualquier selector trae la opción **＋ Nueva
+categoría…** y la que agregues queda disponible en todos lados.
+
+Para encontrar lo pendiente rápido, en *Movimientos* filtra por
+**⚠ Sin categoría**.
+
 ### "Abono y no veo que baje la deuda"
 La pestaña **¿Por qué no baja?** te lo dice en una frase: de cada $100 que has
 abonado, cuánto se quedó el banco en intereses, IVA y comisiones, y cuánto bajó
@@ -127,9 +157,11 @@ El calendario de cortes y pagos te muestra todas las fechas por adelantado.
 **Reglas:**
 
 - Los montos van **siempre en positivo**. El campo `tipo` decide si suma o resta.
-- Tipos que **suben** la deuda: `compra`, `disposicion`, `interes`, `iva`,
-  `comision`, `anualidad`.
-- Tipos que la **bajan**: `abono`, `bonificacion`.
+- Tipos que **suben** la deuda: `compra`, `disposicion`, `mensualidad`,
+  `interes`, `iva`, `comision`, `anualidad`.
+- Tipos que la **bajan**: `abono` (dinero tuyo), `bonificacion` (cashback) y
+  `diferimiento` (saldo que se pasa a meses). Sólo `abono` cuenta como pago tuyo.
+- En `periodo` puedes incluir `saldoDiferido` con el saldo a meses del corte.
 - Fechas en `AAAA-MM-DD`.
 - Si la tarjeta no existe, se crea sola con el nombre de `tarjeta`.
 - Si vuelves a cargar el mismo corte, los movimientos repetidos (misma fecha,
@@ -162,3 +194,10 @@ completo, y también puedes bajar los movimientos en CSV para abrirlos en Excel.
   al saldo promedio diario que usan los bancos; sirve para dimensionar, no para
   cuadrar al centavo con el banco.
 - **IVA:** 16 % sobre intereses y comisiones.
+- **Compras a meses:** un corte guarda por separado el saldo exigible y el saldo
+  diferido a meses. Lo que debes es la suma de ambos; lo que te exigen este
+  corte es sólo el primero. La conciliación trabaja sobre el saldo exigible,
+  que es lo que cuadra con el resumen de movimientos del estado de cuenta.
+- **Qué cuenta como abono:** sólo el dinero que tú pagaste. Un cashback y un
+  diferimiento a meses bajan el saldo del corte, pero no son tuyos, así que no
+  entran en el cálculo de qué proporción de cada abono se va a intereses.
