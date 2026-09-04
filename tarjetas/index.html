@@ -551,9 +551,21 @@ function estadoPago(p){
   }else{
     clave='parcial'; etiqueta='Pago parcial · genera intereses'; clase='rojo';
   }
+  /* Lo que pagaste de más. No se pierde ni se queda el banco con él: baja el
+     saldo del corte siguiente. Como el estado de cuenta lo mete dentro de un
+     solo renglón de "pagos y abonos", desaparece de la vista — y entonces uno
+     no entiende por qué el siguiente corte no bajó lo que esperaba. */
+  const excedente = Math.max(0, pagado + tardio - noInt);
   return {pagado, tardio, total: pagado + tardio, puntuales, tardios, noInt,
-          min, minBase, hayMeses,
+          min, minBase, hayMeses, excedente,
           faltante: Math.max(0, noInt - pagado), venceEn, clave, etiqueta, clase};
+}
+
+/* El corte que sigue a uno dado, si ya está cargado. */
+function corteSiguiente(p){
+  const posteriores = periodosDe(p.tarjetaId)
+    .filter(x => (x.fechaCorte||'') > (p.fechaCorte||''));
+  return posteriores.length ? posteriores[posteriores.length-1] : null;
 }
 
 /* Próximo corte y próxima fecha de pago según la configuración de la tarjeta. */
@@ -1281,7 +1293,9 @@ function resultadoPago(tarjetaId, periodoId, monto){
   const cuerpo =
     e.clave === 'total'
       ? `<div class="aviso verde" style="margin:0">✅ <b>Liquidaste el corte.</b> Este periodo no te
-         va a cobrar un peso de intereses. Así es como no crece la deuda.</div>`
+         va a cobrar un peso de intereses. Así es como no crece la deuda.
+         ${e.excedente > 0 ? `<br><br>Además pagaste <b>${money(e.excedente)}</b> de más: ese
+           excedente se va a restar del corte siguiente, no se pierde.` : ''}</div>`
     : e.clave === 'minimo'
       ? `<div class="aviso ambar" style="margin:0">🟡 <b>Cubriste el mínimo, pero no liquidaste.</b>
          Te faltan <b>${money(e.faltante)}</b> de ${money(e.noInt)}. Sobre lo que quedó, el próximo
@@ -1380,7 +1394,8 @@ function vCortes(){
           <td class="num">${money(minimoEfectivo(p))}
             ${e.hayMeses ? `<div class="sub">incluye ${money(minimoEfectivo(p)-e.minBase)} de mensualidad</div>` : ''}</td>
           <td class="num ${e.pagado>0?'pos':''}">${money(e.pagado)}
-            ${e.tardio>0?`<div class="sub">+${money(e.tardio)} tarde</div>`:''}</td>
+            ${e.tardio>0?`<div class="sub">+${money(e.tardio)} tarde</div>`:''}
+            ${e.excedente>0?`<div class="sub">${money(e.excedente)} de más → al corte siguiente</div>`:''}</td>
           <td><span class="tag ${e.clase}">${e.etiqueta}</span></td>
           <td>${c.movs.length === 0 ? '<span class="tag gris">sin movs</span>'
               : c.cuadra ? '<span class="tag verde">✓ cuadra</span>'
@@ -1435,6 +1450,16 @@ function detallePeriodo(id){
     ${e.tardio > 0 && e.clave !== 'tardio' ? `<div class="aviso ambar">🟡 Además abonaste
       <b>${money(e.tardio)}</b> después de la fecha límite: ese dinero bajó tu saldo pero
       ya no evitó los intereses de este corte.</div>` : ''}
+
+    ${e.excedente > 0 ? (()=>{ const sig = corteSiguiente(p);
+      return `<div class="aviso azul">💡 <b>Pagaste ${money(e.excedente)} de más.</b>
+        Ese excedente no se pierde ni se lo queda el banco: se resta del corte siguiente.
+        ${sig ? `De hecho, el corte del <b>${fechaCorta(sig.fechaCorte)}</b> cerró en
+          <b>${money(sig.saldoNuevo)}</b>; sin este excedente habría cerrado en
+          <b>${money(num(sig.saldoNuevo) + e.excedente)}</b>.`
+              : 'Lo verás cuando cargues el corte siguiente.'}
+        <br><br>El estado de cuenta no lo muestra aparte: lo mete dentro del renglón único de
+        <i>pagos y abonos</i>, y por eso parece que se esfumó.</div>`; })() : ''}
 
     ${c.movs.length ? `
       <h3 style="font-size:14px;margin:18px 0 9px">Conciliación</h3>
