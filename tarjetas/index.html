@@ -201,6 +201,17 @@ details.card>summary .sub{font-weight:500}
   box-shadow:0 4px 16px rgba(0,0,0,.25);line-height:1.45}
 #tip.on{opacity:1}
 
+/* Tabla de cortes: la ecuación del saldo va agrupada y tintada, para que se
+   lea como una sola operación y no como columnas sueltas. */
+.grupo th{font-size:10.5px;letter-spacing:.06em;padding-bottom:4px;border-bottom:0;
+  color:var(--tx-3);text-align:center}
+.grupo th.eq{color:var(--acc)}
+th.eq,td.eq{background:var(--acc-soft)}
+td.eq{border-bottom-color:var(--line)}
+th.eq:first-of-type,td.eq:first-of-type{border-radius:6px 0 0 6px}
+tr.totales td{border-top:2px solid var(--line);border-bottom:0;padding-top:11px}
+tr.totales:hover{background:none}
+
 /* Desglose tipo recibo: para seguir el dinero renglón por renglón */
 .libro{background:var(--panel-2);border:1px solid var(--line);border-left:3px solid var(--acc);
   border-radius:10px;padding:14px 16px;margin:14px 0}
@@ -1408,22 +1419,42 @@ function vCortes(){
     ${!todos.length ? vacioMsg('Esa tarjeta no tiene estados de cuenta cargados.',
         `<button class="btn" onclick="formPeriodo(null,'${fCortes.tarjeta}')">+ Cargar uno</button>`) : `
     <div class="tw"><table>
-      <thead><tr>${fCortes.tarjeta ? '' : '<th>Tarjeta</th>'}<th>Corte</th><th>Vence</th><th class="num">Saldo del corte</th>
-        <th class="num">Pago mínimo</th><th class="num">Abonado</th><th>Estado</th><th>Cuadra</th><th></th></tr></thead>
+      <thead>
+        <tr class="grupo">
+          ${fCortes.tarjeta ? '' : '<th></th>'}<th></th>
+          <th colspan="4" class="eq">Cómo se llega al saldo del corte</th>
+          <th colspan="2">Lo que pagaste después</th><th></th><th></th><th></th>
+        </tr>
+        <tr>
+          ${fCortes.tarjeta ? '' : '<th>Tarjeta</th>'}<th>Corte</th>
+          <th class="num eq">Saldo ant.</th>
+          <th class="num eq">+ Cargos</th>
+          <th class="num eq">− Pagos</th>
+          <th class="num eq">= Saldo</th>
+          <th class="num">Pago mín.</th>
+          <th class="num">Pagado<br>al corte</th>
+          <th>Estado</th><th>Cuadra</th><th></th>
+        </tr>
+      </thead>
       <tbody>${todos.map(p => {
         const e = estadoPago(p), c = conciliar(p);
+        const hay = c.movs.length > 0;
         return `<tr>
           ${fCortes.tarjeta ? '' : `<td><span class="dot" style="background:${colTarjeta(p.tarjetaId)}"></span>${esc(nomTarjeta(p.tarjetaId))}</td>`}
-          <td>${fechaCorta(p.fechaCorte)}</td>
-          <td>${fechaCorta(p.fechaLimitePago)}</td>
-          <td class="num">${money(p.saldoNuevo)}</td>
+          <td style="white-space:nowrap">${fechaCorta(p.fechaCorte)}
+            <div class="sub">vence ${fechaCorta(p.fechaLimitePago)}</div></td>
+          <td class="num eq">${money(p.saldoAnterior)}</td>
+          <td class="num eq ${hay&&c.cargos?'neg':''}">${hay ? money(c.cargos) : '—'}
+            ${hay && c.costos > 0 ? `<div class="sub">${money(c.costos)} interés</div>` : ''}</td>
+          <td class="num eq ${hay&&c.abonos?'pos':''}">${hay ? money(c.abonos) : '—'}</td>
+          <td class="num eq"><b>${money(p.saldoNuevo)}</b></td>
           <td class="num">${money(minimoEfectivo(p))}
-            ${e.hayMeses ? `<div class="sub">incluye ${money(minimoEfectivo(p)-e.minBase)} de mensualidad</div>` : ''}</td>
+            ${e.hayMeses ? `<div class="sub">+${money(minimoEfectivo(p)-e.minBase)} mensualidad</div>` : ''}</td>
           <td class="num ${e.pagado>0?'pos':''}">${money(e.pagado)}
             ${e.tardio>0?`<div class="sub">+${money(e.tardio)} tarde</div>`:''}
-            ${e.excedente>0?`<div class="sub">sobraron ${money(e.excedente)} →</div>`:''}</td>
+            ${e.excedente>0?`<div class="sub">sobró ${money(e.excedente)} →</div>`:''}</td>
           <td><span class="tag ${e.clase}">${e.etiqueta}</span></td>
-          <td>${c.movs.length === 0 ? '<span class="tag gris">sin movs</span>'
+          <td>${!hay ? '<span class="tag gris">sin movs</span>'
               : c.cuadra ? '<span class="tag verde">✓ cuadra</span>'
               : `<span class="tag rojo">${c.dif>0?'+':''}${money(c.dif)}</span>`}</td>
           <td style="width:1%;white-space:nowrap">
@@ -1431,9 +1462,38 @@ function vCortes(){
             <button class="ico" onclick="detallePeriodo('${p.id}')" title="Ver detalle">🔍</button>
             <button class="ico" onclick="formPeriodo('${p.id}')" title="Editar">✎</button>
             <button class="ico" onclick="borrarPeriodo('${p.id}')" title="Eliminar">🗑</button></td>
-        </tr>`;}).join('')}</tbody></table></div>`}
-    <p class="sub" style="margin:12px 0 0">La columna <b>Cuadra</b> compara
-    <code>saldo anterior + cargos − abonos</code> contra el saldo que te reporta el banco.
+        </tr>`;}).join('')}
+        ${(()=>{ /* Sumas de lo mostrado: para eso pediste las columnas. */
+          const con = todos.map(p => conciliar(p)).filter(c => c.movs.length);
+          if(!con.length) return '';
+          const sc = con.reduce((s,c)=>s+c.cargos,0), sa = con.reduce((s,c)=>s+c.abonos,0);
+          const si = con.reduce((s,c)=>s+c.costos,0);
+          const sp = todos.reduce((s,p)=>s+estadoPago(p).total,0);
+          return `<tr class="totales">
+            ${fCortes.tarjeta ? '' : '<td></td>'}
+            <td><b>Suma ${con.length}</b></td>
+            <td class="num eq"></td>
+            <td class="num eq neg"><b>${money(sc)}</b>${si>0?`<div class="sub">${money(si)} interés</div>`:''}</td>
+            <td class="num eq pos"><b>${money(sa)}</b></td>
+            <td class="num eq"></td>
+            <td class="num"></td>
+            <td class="num pos"><b>${money(sp)}</b></td>
+            <td></td><td></td><td></td>
+          </tr>`; })()}
+      </tbody></table></div>`}
+
+    <div class="aviso azul" style="margin:16px 0 0">
+      <b>Los dos "pagos" no son lo mismo, y por eso confunden.</b><br>
+      <b>Pagos del periodo</b> son los abonos que cayeron dentro del periodo de ese corte: ya vienen
+      restados en el saldo, forman parte de la ecuación de la izquierda.<br>
+      <b>Pagado al corte</b> es lo que abonaste <i>después</i> del corte para liquidarlo.<br><br>
+      Es normal que un mismo pago salga en <i>pagado al corte</i> de un renglón y en <i>pagos del
+      periodo</i> del renglón de arriba: es el mismo dinero visto desde los dos lados. Un pago hecho
+      después de un corte liquida ese corte, y al mismo tiempo cae dentro del periodo del corte
+      siguiente.
+    </div>
+    <p class="sub" style="margin:10px 0 0">La columna <b>Cuadra</b> compara
+    <code>saldo anterior + cargos − pagos</code> contra el saldo que te reporta el banco.
     Si marca una diferencia, o falta capturar un movimiento o hay un cobro que no viene desglosado.</p>
   </div>`;
 }

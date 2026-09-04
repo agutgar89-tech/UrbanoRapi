@@ -90,6 +90,26 @@ usa *Movimientos → + Movimiento*.
 La pestaña **Movimientos** filtra por tarjeta, mes, categoría y texto, y abajo te
 desglosa el gasto por categoría de lo que tengas filtrado.
 
+### Leer la tabla de estados de cuenta
+Cada renglón trae la operación completa, de izquierda a derecha:
+
+```
+saldo anterior  +  cargos del periodo  −  pagos del periodo  =  saldo del corte
+```
+
+Puedes seguirla con una calculadora sin abrir nada más, y abajo hay una fila
+con las sumas de todo lo mostrado.
+
+Ojo con los dos "pagos", que es lo que más confunde:
+
+- **Pagos del periodo** son los abonos que cayeron *dentro* del periodo de ese
+  corte. Ya vienen restados en el saldo: son parte de la ecuación.
+- **Pagado al corte** es lo que abonaste *después* del corte, para liquidarlo.
+
+Un mismo pago aparece en los dos lugares, en renglones distintos: liquida el
+corte anterior y a la vez cae dentro del periodo del corte siguiente. Es el
+mismo dinero visto desde los dos lados, no un cobro duplicado.
+
 ### "Desconfío de que sea esa cantidad"
 La pestaña **Estados de cuenta** hace la conciliación de cada corte:
 
