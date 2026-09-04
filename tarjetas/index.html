@@ -585,6 +585,19 @@ function estadoPago(p){
           faltante: Math.max(0, noInt - pagado), venceEn, clave, etiqueta, clase};
 }
 
+/* Cuándo ocurrieron unos movimientos, en corto. Es lo que distingue los dos
+   "pagos" de un corte: unos caen antes de la fecha de corte y otros después.
+   Sin la fecha, dos cifras de pago en el mismo renglón no se pueden separar. */
+function cuando(movs){
+  const f = movs.map(m => m.fecha).filter(Boolean).sort();
+  if(!f.length) return '';
+  if(f[0] === f[f.length-1]) return fechaCorta(f[0]);
+  const corta = iso => { const d = aFecha(iso);
+    const M = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+    return `${d.getDate()} ${M[d.getMonth()]}`; };
+  return `del ${corta(f[0])} al ${corta(f[f.length-1])}`;
+}
+
 /* El corte anterior a uno dado, si está cargado. */
 function cortePrevio(p){
   return periodosDe(p.tarjetaId).find(x => (x.fechaCorte||'') < (p.fechaCorte||'')) || null;
@@ -1422,8 +1435,8 @@ function vCortes(){
       <thead>
         <tr class="grupo">
           ${fCortes.tarjeta ? '' : '<th></th>'}<th></th>
-          <th colspan="4" class="eq">Cómo se llega al saldo del corte</th>
-          <th colspan="2">Lo que pagaste después</th><th></th><th></th><th></th>
+          <th colspan="4" class="eq">Cómo se llega al saldo del corte · movimientos HASTA la fecha de corte</th>
+          <th colspan="2">Para liquidarlo · pagos DESPUÉS del corte</th><th></th><th></th><th></th>
         </tr>
         <tr>
           ${fCortes.tarjeta ? '' : '<th>Tarjeta</th>'}<th>Corte</th>
@@ -1446,12 +1459,14 @@ function vCortes(){
           <td class="num eq">${money(p.saldoAnterior)}</td>
           <td class="num eq ${hay&&c.cargos?'neg':''}">${hay ? money(c.cargos) : '—'}
             ${hay && c.costos > 0 ? `<div class="sub">${money(c.costos)} interés</div>` : ''}</td>
-          <td class="num eq ${hay&&c.abonos?'pos':''}">${hay ? money(c.abonos) : '—'}</td>
+          <td class="num eq ${hay&&c.abonos?'pos':''}">${hay ? money(c.abonos) : '—'}
+            ${hay && c.abonos ? `<div class="sub">${cuando(c.movs.filter(bajaSaldo))}</div>` : ''}</td>
           <td class="num eq"><b>${money(p.saldoNuevo)}</b></td>
           <td class="num">${money(minimoEfectivo(p))}
             ${e.hayMeses ? `<div class="sub">+${money(minimoEfectivo(p)-e.minBase)} mensualidad</div>` : ''}</td>
           <td class="num ${e.pagado>0?'pos':''}">${money(e.pagado)}
-            ${e.tardio>0?`<div class="sub">+${money(e.tardio)} tarde</div>`:''}
+            ${e.pagado>0?`<div class="sub">${cuando(e.puntuales)}</div>`:''}
+            ${e.tardio>0?`<div class="sub">+${money(e.tardio)} tarde · ${cuando(e.tardios)}</div>`:''}
             ${e.excedente>0?`<div class="sub">sobró ${money(e.excedente)} →</div>`:''}</td>
           <td><span class="tag ${e.clase}">${e.etiqueta}</span></td>
           <td>${!hay ? '<span class="tag gris">sin movs</span>'
@@ -1484,14 +1499,14 @@ function vCortes(){
       </tfoot></table></div>`}
 
     <div class="aviso azul" style="margin:16px 0 0">
-      <b>Los dos "pagos" no son lo mismo, y por eso confunden.</b><br>
-      <b>Pagos del periodo</b> son los abonos que cayeron dentro del periodo de ese corte: ya vienen
-      restados en el saldo, forman parte de la ecuación de la izquierda.<br>
-      <b>Pagado al corte</b> es lo que abonaste <i>después</i> del corte para liquidarlo.<br><br>
-      Es normal que un mismo pago salga en <i>pagado al corte</i> de un renglón y en <i>pagos del
-      periodo</i> del renglón de arriba: es el mismo dinero visto desde los dos lados. Un pago hecho
-      después de un corte liquida ese corte, y al mismo tiempo cae dentro del periodo del corte
-      siguiente.
+      <b>¿Por qué hay dos cifras de pagos en un mismo renglón?</b> Porque son de fechas distintas, y
+      cada columna trae abajo <i>cuándo</i> se pagó, que es lo que las separa:<br><br>
+      <b>− Pagos del periodo</b>: los abonos hechos <b>antes</b> de la fecha de corte. Ya vienen
+      restados en el saldo, son parte de la ecuación de la izquierda.<br>
+      <b>Pagado al corte</b>: lo que abonaste <b>después</b> del corte, para liquidarlo.<br><br>
+      Por eso un mismo pago sale dos veces en la tabla, en renglones distintos: liquida su corte y,
+      como se hizo después de esa fecha, cae dentro del periodo del corte siguiente. Es el mismo
+      dinero visto desde los dos lados, no un cobro repetido.
     </div>
     <p class="sub" style="margin:10px 0 0">La columna <b>Cuadra</b> compara
     <code>saldo anterior + cargos − pagos</code> contra el saldo que te reporta el banco.

@@ -110,6 +110,11 @@ Un mismo pago aparece en los dos lugares, en renglones distintos: liquida el
 corte anterior y a la vez cae dentro del periodo del corte siguiente. Es el
 mismo dinero visto desde los dos lados, no un cobro duplicado.
 
+Lo que los distingue es la fecha, así que cada columna la trae abajo. En el
+corte del 4 de mayo, por ejemplo, los $1,777.97 de *pagos del periodo* son del
+23 de abril —antes del corte— y los $888.00 de *pagado al corte* son del 22 de
+mayo, después.
+
 ### "Desconfío de que sea esa cantidad"
 La pestaña **Estados de cuenta** hace la conciliación de cada corte:
 
