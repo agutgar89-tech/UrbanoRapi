@@ -51,9 +51,25 @@ Dos caminos:
   cuenta antes de dártelo, así que un error de lectura no pasa silencioso.
 
 ### 4. Registra cada abono
-Cada vez que pagues, captúralo como movimiento tipo **Abono / Pago** con la fecha
-real. Esto es lo que hace que todo lo demás funcione: sin abonos capturados no se
-puede saber cuánto bajó tu deuda de verdad.
+Esto es lo que hace que todo lo demás funcione: sin abonos capturados no se puede
+saber cuánto bajó tu deuda de verdad.
+
+Lo más rápido es el botón **💵 Registrar pago**, que está en la tarjeta, en cada
+renglón de *Estados de cuenta*, y como **Ya lo pagué** en las alertas del resumen.
+Te ofrece el **pago mínimo** y **lo que falta para no generar intereses** ya
+calculados de tu estado de cuenta, con la fecha de hoy puesta: das un clic y
+listo. También puedes capturar otro monto.
+
+Al registrarlo te dice qué logró ese pago: si liquidaste el corte, si sólo
+cubriste el mínimo (y cuánto interés te van a cobrar por lo que quedó), o si
+llegó tarde.
+
+> No existe un "ya pagué" que sea sólo una palomita: el botón registra un abono
+> real, y el estado del corte se sigue calculando de los movimientos. Si apuntas
+> un pago que no hiciste, el saldo que te muestre la app va a ser mentira.
+
+Para pagos que no encajan ahí (una bonificación, un cargo que te devolvieron),
+usa *Movimientos → + Movimiento*.
 
 ---
 

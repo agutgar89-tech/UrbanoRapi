@@ -201,6 +201,16 @@ details.card>summary .sub{font-weight:500}
   box-shadow:0 4px 16px rgba(0,0,0,.25);line-height:1.45}
 #tip.on{opacity:1}
 
+/* Opciones de monto al registrar un pago */
+.ops{display:grid;gap:9px;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));margin-top:6px}
+.opcion{text-align:left;background:var(--panel-2);border:2px solid var(--line);border-radius:10px;
+  padding:11px 13px;cursor:pointer;font-family:inherit;color:var(--tx);display:block}
+.opcion:hover{border-color:var(--acc)}
+.opcion.on{border-color:var(--acc);background:var(--acc-soft)}
+.opcion b{display:block;font-size:18px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.opcion span{display:block;font-size:12.5px;color:var(--tx-2);margin-top:2px;font-weight:600}
+.opcion em{display:block;font-size:11.5px;color:var(--tx-3);margin-top:4px;font-style:normal;line-height:1.4}
+
 .nota{color:var(--tx-3);cursor:help;font-size:13px;margin-left:4px;border-radius:3px}
 .nota:hover,.nota:focus-visible{color:var(--acc);outline:none}
 .nota:focus-visible{box-shadow:0 0 0 2px var(--acc)}
@@ -771,12 +781,16 @@ function vResumen(){
     if(e.venceEn < 0 && e.venceEn > -60 && e.total <= 0){
       avisos.push(`<div class="aviso rojo">🔴 <b>${esc(nomTarjeta(p.tarjetaId))}</b> — el pago del corte del
         ${fechaCorta(p.fechaCorte)} venció el ${fechaCorta(p.fechaLimitePago)} y no tienes abonos registrados.
-        Debías ${money(p.pagoNoIntereses||p.saldoNuevo)}.</div>`);
+        Debías ${money(p.pagoNoIntereses||p.saldoNuevo)}.
+        <button class="btn sm" style="margin-left:8px"
+          onclick="formPago('${p.tarjetaId}','${p.id}')">Ya lo pagué</button></div>`);
     }else if(e.venceEn >= 0 && e.venceEn <= 12){
       avisos.push(`<div class="aviso ${e.venceEn<=3?'rojo':'ambar'}">${e.venceEn<=3?'🔴':'🟡'}
         <b>${esc(nomTarjeta(p.tarjetaId))}</b> — vence en <b>${e.venceEn} día${e.venceEn===1?'':'s'}</b>
         (${fechaCorta(p.fechaLimitePago)}). Para no generar intereses te faltan
-        <b>${money(e.faltante)}</b> de ${money(e.noInt)}.</div>`);
+        <b>${money(e.faltante)}</b> de ${money(e.noInt)}.
+        <button class="btn sm" style="margin-left:8px"
+          onclick="formPago('${p.tarjetaId}','${p.id}')">Ya lo pagué</button></div>`);
     }
   });
   /* Cortes por venir según la configuración de cada tarjeta. */
@@ -810,6 +824,10 @@ function vResumen(){
     <button class="btn sm" onclick="formTarjeta()">+ Tarjeta</button>
     <button class="btn sm ghost" onclick="formMovimiento()">+ Movimiento</button></h2>
     <div class="grid g2">${D.tarjetas.map(t => pintaTarjeta(t, false)).join('')}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+      ${D.tarjetas.map(t => `<button class="btn sm ghost" onclick="formPago('${t.id}')">
+        💵 Registrar pago · ${esc(t.nombre)}</button>`).join('')}
+    </div>
   </div>
 
   ${agenda.length ? `<div class="card"><h2>Calendario de cortes y pagos</h2>
@@ -860,6 +878,7 @@ function fichaTarjeta(t){
   return `<div class="card">
     <h2><span class="dot" style="background:${t.color}"></span>${esc(t.nombre)}
       <span class="sub">${esc(t.banco||'')}</span><span class="sp"></span>
+      <button class="btn sm" onclick="formPago('${t.id}')">💵 Registrar pago</button>
       <button class="btn sm ghost" onclick="formMovimiento(null,'${t.id}')">+ Movimiento</button>
       <button class="btn sm ghost" onclick="formPeriodo(null,'${t.id}')">+ Estado de cuenta</button>
       <button class="btn sm ghost" onclick="formTarjeta('${t.id}')">Editar</button></h2>
@@ -1120,6 +1139,121 @@ function formMovimiento(id, tarjetaPre){
     }},
   ]);
 }
+/* ==========================================================================
+   Registrar un pago con un botón
+   La app no guarda un "ya pagué" aparte: registra el abono real. Así el estado
+   del corte (si libró intereses, si sólo cubrió el mínimo) se sigue calculando
+   de los movimientos y no de una casilla que puede mentir.
+   ========================================================================== */
+function formPago(tarjetaId, periodoId){
+  const t = tarjeta(tarjetaId);
+  if(!t) return aviso('Elige una tarjeta');
+  const p = periodoId ? D.periodos.find(x => x.id === periodoId) : periodosDe(tarjetaId)[0];
+  const e = p ? estadoPago(p) : null;
+
+  /* Opciones que salen del estado de cuenta, para no teclear cifras. */
+  const ops = [];
+  if(p && num(p.pagoMinimo) > 0)
+    ops.push({m:num(p.pagoMinimo), t:'Pago mínimo', d:'Pago mínimo',
+              n:'Mantiene la tarjeta al corriente, pero genera intereses'});
+  if(e && e.faltante > 0.5 && Math.abs(e.faltante - num(p.pagoMinimo)) > 0.5)
+    ops.push({m:+e.faltante.toFixed(2), t:'Lo que falta para no generar intereses',
+              d:'Pago para no generar intereses',
+              n:'Con esto este corte no te cobra un peso de intereses'});
+  else if(p && num(p.pagoNoIntereses||p.saldoNuevo) > 0 && !(e && e.faltante > 0.5))
+    ops.push({m:num(p.pagoNoIntereses||p.saldoNuevo), t:'Pago para no generar intereses',
+              d:'Pago para no generar intereses', n:'Liquida el saldo del corte'});
+
+  const hoy = hoyISO();
+  const tarde = p && hoy > (p.fechaLimitePago||'');
+
+  modal(`Registrar pago · ${t.nombre}`, `
+    ${p ? `<div class="aviso ${e.clave==='total'?'verde':tarde?'rojo':'azul'}" style="margin-bottom:16px">
+      Corte del <b>${fechaCorta(p.fechaCorte)}</b>, vence el <b>${fechaCorta(p.fechaLimitePago)}</b>.
+      Saldo del corte <b>${money(p.saldoNuevo)}</b>${e.pagado>0?` · ya abonaste <b>${money(e.pagado)}</b>`:''}.
+      ${tarde ? '<br>⚠️ La fecha límite ya pasó: este pago va a contar como tardío y el corte igual generó intereses.' : ''}
+    </div>` : `<div class="aviso ambar" style="margin-bottom:16px">Esta tarjeta no tiene estados de
+      cuenta cargados, así que no puedo sugerirte montos. Captura el pago a mano.</div>`}
+
+    ${ops.length ? `<label>¿Cuánto pagaste?</label>
+      <div class="ops" id="opsPago">
+        ${ops.map(o => `<button type="button" class="opcion" data-monto="${o.m.toFixed(2)}" data-desc="${esc(o.d)}">
+          <b>${money(o.m)}</b><span>${esc(o.t)}</span><em>${esc(o.n)}</em></button>`).join('')}
+        <button type="button" class="opcion" data-monto="" data-desc="Pago">
+          <b>Otro monto</b><span>Lo capturas abajo</span></button>
+      </div>` : ''}
+
+    <div class="fgrid" style="margin-top:14px">
+      <div class="field"><label>Monto pagado *</label>
+        <input name="monto" id="montoPago" inputmode="decimal" placeholder="0.00"
+          value="${ops.length ? ops[0].m.toFixed(2) : ''}"></div>
+      <div class="field"><label>Fecha del pago *</label>
+        <input type="date" name="fecha" value="${hoy}"></div>
+    </div>
+    <div class="field"><label>Concepto</label>
+      <input name="descripcion" id="descPago" value="${ops.length ? esc(ops[0].d) : 'Pago'}"></div>
+    <input type="hidden" name="tarjetaId" value="${tarjetaId}">
+    <p class="sub" style="margin:0">Confirma sólo pagos que ya hiciste. Esto registra un abono real:
+    si lo apuntas y no lo hiciste, el saldo que te muestre la app va a ser mentira.</p>
+  `, [
+    {texto:'Cancelar', accion:cerrarModal},
+    {texto:'Registrar pago', clase:'', accion:()=>{
+      const v = leerForm();
+      const monto = Math.abs(num(v.monto));
+      if(!monto) return aviso('Captura cuánto pagaste');
+      D.movimientos.push({id:uid(), tarjetaId:v.tarjetaId, fecha:v.fecha||hoyISO(),
+        descripcion:v.descripcion||'Pago', tipo:'abono', monto, categoria:'', msi:'', nota:'',
+        corte:'', creado:new Date().toISOString()});
+      guardar();
+      cerrarModal();
+      resultadoPago(v.tarjetaId, p ? p.id : null, monto);
+    }},
+  ]);
+
+  const cont = $('opsPago');
+  if(cont) cont.addEventListener('click', ev => {
+    const b = ev.target.closest('button[data-monto]'); if(!b) return;
+    [...cont.children].forEach(x => x.classList.toggle('on', x === b));
+    $('montoPago').value = b.dataset.monto;
+    $('descPago').value = b.dataset.desc;
+    if(!b.dataset.monto) $('montoPago').focus();
+  });
+  if(cont && cont.firstElementChild) cont.firstElementChild.classList.add('on');
+}
+
+/* Después de registrar, decir qué logró ese pago: es la razón de ser de la app. */
+function resultadoPago(tarjetaId, periodoId, monto){
+  render();
+  const p = periodoId ? D.periodos.find(x => x.id === periodoId) : null;
+  if(!p) return aviso(`Pago de ${money(monto)} registrado ✓`, 3200);
+  const e = estadoPago(p);
+  const t = tarjeta(tarjetaId) || {};
+  const cuerpo =
+    e.clave === 'total'
+      ? `<div class="aviso verde" style="margin:0">✅ <b>Liquidaste el corte.</b> Este periodo no te
+         va a cobrar un peso de intereses. Así es como no crece la deuda.</div>`
+    : e.clave === 'minimo'
+      ? `<div class="aviso ambar" style="margin:0">🟡 <b>Cubriste el mínimo, pero no liquidaste.</b>
+         Te faltan <b>${money(e.faltante)}</b> de ${money(e.noInt)}. Sobre lo que quedó, el próximo
+         corte te va a cobrar${t.tasaAnual?` alrededor de <b>${money(interesEstimado(t, num(p.saldoNuevo)-e.pagado))}</b>`:' intereses'}.
+         Pagar el mínimo mantiene la tarjeta al corriente; no baja la deuda.</div>`
+    : e.clave === 'tardio'
+      ? `<div class="aviso rojo" style="margin:0">🔴 <b>El pago llegó después de la fecha límite.</b>
+         Bajó tu saldo, pero este corte ya generó intereses y puede traer comisión por pago tardío.</div>`
+      : `<div class="aviso rojo" style="margin:0">🔴 <b>No alcanzó ni para el pago mínimo</b>
+         (${money(e.min)}). Además de intereses puede haber comisión por pago tardío.</div>`;
+  modal('Pago registrado', `
+    <p style="margin:0 0 14px;line-height:1.6">Registré <b>${money(monto)}</b> a
+      <b>${esc(t.nombre||'')}</b>.</p>
+    ${cuerpo}
+    <div class="grid g3" style="margin-top:16px">
+      ${kpi('Abonado a este corte', money(e.total))}
+      ${kpi('Saldo del corte', money(p.saldoNuevo))}
+      ${kpi('Falta para liquidar', money(e.faltante), '', e.faltante>0?'bad':'ok')}
+    </div>
+  `, [{espacio:true}, {texto:'Entendido', clase:'', accion:cerrarModal}]);
+}
+
 function borrarMov(id){
   const m = D.movimientos.find(x => x.id === id);
   confirmar('Eliminar movimiento',
@@ -1167,6 +1301,7 @@ function vCortes(){
               : c.cuadra ? '<span class="tag verde">✓ cuadra</span>'
               : `<span class="tag rojo">${c.dif>0?'+':''}${money(c.dif)}</span>`}</td>
           <td style="width:1%;white-space:nowrap">
+            <button class="ico" onclick="formPago('${p.tarjetaId}','${p.id}')" title="Registrar pago">💵</button>
             <button class="ico" onclick="detallePeriodo('${p.id}')" title="Ver detalle">🔍</button>
             <button class="ico" onclick="formPeriodo('${p.id}')" title="Editar">✎</button>
             <button class="ico" onclick="borrarPeriodo('${p.id}')" title="Eliminar">🗑</button></td>
@@ -1265,7 +1400,8 @@ function detallePeriodo(id){
         <td>${fechaCorta(m.fecha)}</td><td>${esc(m.descripcion||'Abono')}</td>
         <td class="num pos">${money(m.monto)}</td></tr>`).join('')}</tbody></table></div>` : ''}
     ${p.nota ? `<p class="sub" style="margin:16px 0 0">${esc(p.nota)}</p>` : ''}
-  `, [{texto:'Editar', accion:()=>{cerrarModal(); formPeriodo(id);}},
+  `, [{texto:'💵 Registrar pago', accion:()=>{cerrarModal(); formPago(p.tarjetaId, p.id);}},
+      {texto:'Editar', accion:()=>{cerrarModal(); formPeriodo(id);}},
       {espacio:true},
       {texto:'Cerrar', clase:'', accion:cerrarModal}]);
 }
