@@ -1327,8 +1327,9 @@ function vCortes(){
     return `<div class="card">${vacioMsg('Primero agrega una tarjeta.',
       '<button class="btn" onclick="formTarjeta()">+ Agregar tarjeta</button>')}</div>`;
 
-  const todos = [...D.periodos].sort((a,b) => (b.fechaCorte||'').localeCompare(a.fechaCorte||''));
-  if(!todos.length)
+  const cargados = [...D.periodos].sort((a,b) => (b.fechaCorte||'').localeCompare(a.fechaCorte||''));
+  const todos = cargados.filter(p => !fCortes.tarjeta || p.tarjetaId === fCortes.tarjeta);
+  if(!cargados.length)
     return `<div class="card"><h2>Estados de cuenta</h2>
       ${vacioMsg(`Aquí capturas los datos que vienen impresos en cada estado de cuenta: saldo anterior,
         saldo nuevo, pago mínimo, pago para no generar intereses y las fechas de corte y límite de pago.<br><br>
@@ -1336,19 +1337,48 @@ function vCortes(){
         que tienes capturados. Cuando no cuadra, ahí está el cobro que no reconoces.`,
         '<button class="btn" onclick="formPeriodo()">+ Cargar estado de cuenta</button>')}</div>`;
 
-  return `<div class="card"><h2>Estados de cuenta <span class="sub">${todos.length} cargados</span>
-    <span class="sp"></span><button class="btn sm" onclick="formPeriodo()">+ Cargar estado de cuenta</button></h2>
+  /* Con una sola tarjeta el filtro sólo estorba. */
+  const filtrable = D.tarjetas.length > 1;
+  const t = fCortes.tarjeta ? tarjeta(fCortes.tarjeta) : null;
+
+  return `<div class="card"><h2>Estados de cuenta
+    <span class="sub">${fCortes.tarjeta ? `${todos.length} de ${cargados.length}` : `${cargados.length} cargados`}</span>
+    <span class="sp"></span>
+    ${filtrable ? `<select style="width:auto" onchange="fCortes.tarjeta=this.value;render()">
+      ${selTarjetas(fCortes.tarjeta, 'Todas las tarjetas')}</select>` : ''}
+    <button class="btn sm" onclick="formPeriodo()">+ Cargar estado de cuenta</button></h2>
+
+    ${t ? (()=>{ /* Resumen de la tarjeta filtrada: lo que se busca al aislarla. */
+      const dif = todos.filter(p => !conciliar(p).cuadra && conciliar(p).movs.length).length;
+      const costo = movsDe(t.id).filter(m => TIPOS_COSTO.includes(m.tipo))
+        .reduce((s,m)=>s+Math.abs(num(m.monto)),0);
+      const sinLiquidar = todos.filter(p => estadoPago(p).clave !== 'total').length;
+      return `<div class="grid g4" style="margin-bottom:16px">
+        ${kpi('Debes hoy', money(saldoTarjeta(t.id)),
+          num((periodosDe(t.id)[0]||{}).saldoDiferido) > 0
+            ? `exigible ${money(saldoExigible(t.id))} · a meses ${money((periodosDe(t.id)[0]||{}).saldoDiferido)}` : '',
+          saldoTarjeta(t.id)>0?'bad':'ok')}
+        ${kpi('Intereses y cargos', money(costo), `en ${todos.length} corte(s)`, costo>0?'bad':'ok')}
+        ${kpi('Cortes sin liquidar', String(sinLiquidar),
+          sinLiquidar ? 'cada uno generó intereses' : 'todos pagados completos', sinLiquidar?'warn':'ok')}
+        ${kpi('Cortes que no cuadran', String(dif),
+          dif ? 'revísalos con la lupa' : 'todo conciliado', dif?'bad':'ok')}
+      </div>`; })() : ''}
+
+    ${!todos.length ? vacioMsg('Esa tarjeta no tiene estados de cuenta cargados.',
+        `<button class="btn" onclick="formPeriodo(null,'${fCortes.tarjeta}')">+ Cargar uno</button>`) : `
     <div class="tw"><table>
-      <thead><tr><th>Tarjeta</th><th>Corte</th><th>Vence</th><th class="num">Saldo del corte</th>
+      <thead><tr>${fCortes.tarjeta ? '' : '<th>Tarjeta</th>'}<th>Corte</th><th>Vence</th><th class="num">Saldo del corte</th>
         <th class="num">Pago mínimo</th><th class="num">Abonado</th><th>Estado</th><th>Cuadra</th><th></th></tr></thead>
       <tbody>${todos.map(p => {
         const e = estadoPago(p), c = conciliar(p);
         return `<tr>
-          <td><span class="dot" style="background:${colTarjeta(p.tarjetaId)}"></span>${esc(nomTarjeta(p.tarjetaId))}</td>
+          ${fCortes.tarjeta ? '' : `<td><span class="dot" style="background:${colTarjeta(p.tarjetaId)}"></span>${esc(nomTarjeta(p.tarjetaId))}</td>`}
           <td>${fechaCorta(p.fechaCorte)}</td>
           <td>${fechaCorta(p.fechaLimitePago)}</td>
           <td class="num">${money(p.saldoNuevo)}</td>
-          <td class="num">${money(p.pagoMinimo)}</td>
+          <td class="num">${money(minimoEfectivo(p))}
+            ${e.hayMeses ? `<div class="sub">incluye ${money(minimoEfectivo(p)-e.minBase)} de mensualidad</div>` : ''}</td>
           <td class="num ${e.pagado>0?'pos':''}">${money(e.pagado)}
             ${e.tardio>0?`<div class="sub">+${money(e.tardio)} tarde</div>`:''}</td>
           <td><span class="tag ${e.clase}">${e.etiqueta}</span></td>
@@ -1360,7 +1390,7 @@ function vCortes(){
             <button class="ico" onclick="detallePeriodo('${p.id}')" title="Ver detalle">🔍</button>
             <button class="ico" onclick="formPeriodo('${p.id}')" title="Editar">✎</button>
             <button class="ico" onclick="borrarPeriodo('${p.id}')" title="Eliminar">🗑</button></td>
-        </tr>`;}).join('')}</tbody></table></div>
+        </tr>`;}).join('')}</tbody></table></div>`}
     <p class="sub" style="margin:12px 0 0">La columna <b>Cuadra</b> compara
     <code>saldo anterior + cargos − abonos</code> contra el saldo que te reporta el banco.
     Si marca una diferencia, o falta capturar un movimiento o hay un cobro que no viene desglosado.</p>
@@ -1788,6 +1818,7 @@ function pendientes(){
           conceptos: Object.values(porConcepto).sort((a,b)=>b.monto-a.monto)};
 }
 
+let fCortes = {tarjeta:''};
 let fGastos = {tarjeta:'', mes:''};
 let abiertoClasificar = true;   // la primera vez conviene verlo abierto
 let verClasificar = 12;         // cuántos conceptos se listan de golpe
