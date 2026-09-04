@@ -1193,6 +1193,18 @@ function formPago(tarjetaId, periodoId){
     ops.push({m:num(p.pagoNoIntereses||p.saldoNuevo), t:'Pago para no generar intereses',
               d:'Pago para no generar intereses', n:'Liquida el saldo del corte'});
 
+  /* De menor a mayor: así se lee como una escalera y se ve de un golpe cuál
+     opción conviene. A veces liquidar el corte cuesta menos que el "mínimo +
+     mensualidad", y eso hay que poder verlo. */
+  ops.sort((a,b) => a.m - b.m);
+  /* Se listan de menor a mayor porque así se leen, pero la que viene marcada es
+     la más barata que NO te perjudica: nunca hay que preseleccionar la opción
+     que le quita los meses sin intereses a sus compras diferidas. */
+  const iSugerida = Math.max(0, ops.findIndex(o => o.m && !o.malo));
+  const liquidar = ops.find(o => o.d === 'Pago para no generar intereses');
+  const conMensualidad = ops.find(o => o.d === 'Pago mínimo + mensualidad');
+  const liquidarSaleMejor = liquidar && conMensualidad && liquidar.m < conMensualidad.m;
+
   const hoy = hoyISO();
   const tarde = p && hoy > (p.fechaLimitePago||'');
 
@@ -1206,7 +1218,10 @@ function formPago(tarjetaId, periodoId){
       <b>${money(p.saldoDiferido)}</b> en compras a meses. El estado de cuenta pide
       <b>${money(conMeses)}</b>, no ${money(minBase)}: la diferencia es la mensualidad de esas compras.
       Si pagas sólo ${money(minBase)}, el contrato dice que tus compras diferidas
-      <b>empiezan a generar intereses ordinarios</b> el siguiente periodo.</div>` : ''}` : `<div class="aviso ambar" style="margin-bottom:16px">Esta tarjeta no tiene estados de
+      <b>empiezan a generar intereses ordinarios</b> el siguiente periodo.</div>` : ''}
+    ${liquidarSaleMejor ? `<div class="aviso verde" style="margin:-6px 0 16px">💡 Aquí liquidar
+      sale <b>más barato</b> que el mínimo con mensualidad: con <b>${money(liquidar.m)}</b> dejas
+      el corte en ceros, contra ${money(conMensualidad.m)} del mínimo con mensualidad.</div>` : ''}` : `<div class="aviso ambar" style="margin-bottom:16px">Esta tarjeta no tiene estados de
       cuenta cargados, así que no puedo sugerirte montos. Captura el pago a mano.</div>`}
 
     ${ops.length ? `<label>¿Cuánto pagaste?</label>
@@ -1221,12 +1236,12 @@ function formPago(tarjetaId, periodoId){
     <div class="fgrid" style="margin-top:14px">
       <div class="field"><label>Monto pagado *</label>
         <input name="monto" id="montoPago" inputmode="decimal" placeholder="0.00"
-          value="${ops.length ? ops[0].m.toFixed(2) : ''}"></div>
+          value="${ops.length && ops[iSugerida].m ? ops[iSugerida].m.toFixed(2) : ''}"></div>
       <div class="field"><label>Fecha del pago *</label>
         <input type="date" name="fecha" value="${hoy}"></div>
     </div>
     <div class="field"><label>Concepto</label>
-      <input name="descripcion" id="descPago" value="${ops.length ? esc(ops[0].d) : 'Pago'}"></div>
+      <input name="descripcion" id="descPago" value="${ops.length ? esc(ops[iSugerida].d) : 'Pago'}"></div>
     <input type="hidden" name="tarjetaId" value="${tarjetaId}">
     <p class="sub" style="margin:0">Confirma sólo pagos que ya hiciste. Esto registra un abono real:
     si lo apuntas y no lo hiciste, el saldo que te muestre la app va a ser mentira.</p>
@@ -1253,7 +1268,7 @@ function formPago(tarjetaId, periodoId){
     $('descPago').value = b.dataset.desc;
     if(!b.dataset.monto) $('montoPago').focus();
   });
-  if(cont && cont.firstElementChild) cont.firstElementChild.classList.add('on');
+  if(cont && cont.children[iSugerida]) cont.children[iSugerida].classList.add('on');
 }
 
 /* Después de registrar, decir qué logró ese pago: es la razón de ser de la app. */
