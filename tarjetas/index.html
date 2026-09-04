@@ -207,6 +207,9 @@ details.card>summary .sub{font-weight:500}
   padding:11px 13px;cursor:pointer;font-family:inherit;color:var(--tx);display:block}
 .opcion:hover{border-color:var(--acc)}
 .opcion.on{border-color:var(--acc);background:var(--acc-soft)}
+.opcion.malo{border-color:var(--warn)}
+.opcion.malo em{color:var(--warn)}
+.opcion.malo.on{border-color:var(--bad);background:var(--bad-soft)}
 .opcion b{display:block;font-size:18px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
 .opcion span{display:block;font-size:12.5px;color:var(--tx-2);margin-top:2px;font-weight:600}
 .opcion em{display:block;font-size:11.5px;color:var(--tx-3);margin-top:4px;font-style:normal;line-height:1.4}
@@ -505,6 +508,17 @@ function conciliar(p){
   return {movs, cargos, abonos, costos, esperado, dif, cuadra: Math.abs(dif) < 1};
 }
 
+/* El mínimo que de verdad te deja tranquilo.
+   Cuando traes compras a meses, el estado de cuenta trae dos mínimos: el
+   "pago mínimo" a secas y el "pago mínimo + compras y cargos diferidos a
+   meses". Pagar sólo el primero deja sin cubrir la mensualidad, y el propio
+   contrato dice que entonces esas compras empiezan a generar intereses
+   ordinarios: un saldo a meses sin intereses se convierte en uno con ellos.
+   Así que el piso real es el segundo. */
+function minimoEfectivo(p){
+  return num(p.pagoMinimoConMeses) || num(p.pagoMinimo);
+}
+
 /* Estado del pago de un corte: ¿alcanzó para no generar intereses?
    Sólo los abonos puntuales cuentan para librarte del interés; los tardíos
    se reportan aparte porque sí bajaron el saldo. */
@@ -516,7 +530,9 @@ function estadoPago(p){
   const tardios   = todos.filter(m => (m.fecha||'') >  limite);
   const pagado = suma(puntuales), tardio = suma(tardios);
   const noInt = num(p.pagoNoIntereses) || num(p.saldoNuevo);
-  const min = num(p.pagoMinimo);
+  const minBase = num(p.pagoMinimo);
+  const min = minimoEfectivo(p);
+  const hayMeses = num(p.pagoMinimoConMeses) > minBase + 0.01;
   const venceEn = diasEntre(hoyISO(), limite);
   let clave, etiqueta, clase;
   if(pagado <= 0 && tardio > 0){
@@ -529,10 +545,14 @@ function estadoPago(p){
     clave='total'; etiqueta='Pagado total · sin intereses'; clase='verde';
   }else if(min > 0 && pagado + 0.99 >= min){
     clave='minimo'; etiqueta='Sólo el mínimo · genera intereses'; clase='ambar';
+  }else if(hayMeses && minBase > 0 && pagado + 0.99 >= minBase){
+    /* Cubrió el mínimo a secas pero no la mensualidad de las compras a meses. */
+    clave='sinMensualidad'; etiqueta='No cubrió la mensualidad a meses'; clase='rojo';
   }else{
     clave='parcial'; etiqueta='Pago parcial · genera intereses'; clase='rojo';
   }
-  return {pagado, tardio, total: pagado + tardio, puntuales, tardios, noInt, min,
+  return {pagado, tardio, total: pagado + tardio, puntuales, tardios, noInt,
+          min, minBase, hayMeses,
           faltante: Math.max(0, noInt - pagado), venceEn, clave, etiqueta, clase};
 }
 
@@ -1153,9 +1173,18 @@ function formPago(tarjetaId, periodoId){
 
   /* Opciones que salen del estado de cuenta, para no teclear cifras. */
   const ops = [];
-  if(p && num(p.pagoMinimo) > 0)
-    ops.push({m:num(p.pagoMinimo), t:'Pago mínimo', d:'Pago mínimo',
-              n:'Mantiene la tarjeta al corriente, pero genera intereses'});
+  const conMeses = p ? num(p.pagoMinimoConMeses) : 0;
+  const minBase  = p ? num(p.pagoMinimo) : 0;
+  const hayMeses = conMeses > minBase + 0.01;
+  if(hayMeses)
+    ops.push({m:conMeses, t:'Pago mínimo + mensualidad a meses', d:'Pago mínimo + mensualidad',
+              n:'Este es el mínimo de verdad: incluye la mensualidad de tus compras a meses'});
+  if(minBase > 0)
+    ops.push({m:minBase, t:hayMeses ? 'Pago mínimo a secas ⚠️' : 'Pago mínimo', d:'Pago mínimo',
+              n: hayMeses
+                 ? 'No cubre la mensualidad a meses: tus compras diferidas empezarían a generar intereses'
+                 : 'Mantiene la tarjeta al corriente, pero genera intereses',
+              malo: hayMeses});
   if(e && e.faltante > 0.5 && Math.abs(e.faltante - num(p.pagoMinimo)) > 0.5)
     ops.push({m:+e.faltante.toFixed(2), t:'Lo que falta para no generar intereses',
               d:'Pago para no generar intereses',
@@ -1172,12 +1201,18 @@ function formPago(tarjetaId, periodoId){
       Corte del <b>${fechaCorta(p.fechaCorte)}</b>, vence el <b>${fechaCorta(p.fechaLimitePago)}</b>.
       Saldo del corte <b>${money(p.saldoNuevo)}</b>${e.pagado>0?` · ya abonaste <b>${money(e.pagado)}</b>`:''}.
       ${tarde ? '<br>⚠️ La fecha límite ya pasó: este pago va a contar como tardío y el corte igual generó intereses.' : ''}
-    </div>` : `<div class="aviso ambar" style="margin-bottom:16px">Esta tarjeta no tiene estados de
+    </div>
+    ${hayMeses ? `<div class="aviso ambar" style="margin:-6px 0 16px">🟡 Traes
+      <b>${money(p.saldoDiferido)}</b> en compras a meses. El estado de cuenta pide
+      <b>${money(conMeses)}</b>, no ${money(minBase)}: la diferencia es la mensualidad de esas compras.
+      Si pagas sólo ${money(minBase)}, el contrato dice que tus compras diferidas
+      <b>empiezan a generar intereses ordinarios</b> el siguiente periodo.</div>` : ''}` : `<div class="aviso ambar" style="margin-bottom:16px">Esta tarjeta no tiene estados de
       cuenta cargados, así que no puedo sugerirte montos. Captura el pago a mano.</div>`}
 
     ${ops.length ? `<label>¿Cuánto pagaste?</label>
       <div class="ops" id="opsPago">
-        ${ops.map(o => `<button type="button" class="opcion" data-monto="${o.m.toFixed(2)}" data-desc="${esc(o.d)}">
+        ${ops.map(o => `<button type="button" class="opcion${o.malo?' malo':''}"
+            data-monto="${o.m.toFixed(2)}" data-desc="${esc(o.d)}">
           <b>${money(o.m)}</b><span>${esc(o.t)}</span><em>${esc(o.n)}</em></button>`).join('')}
         <button type="button" class="opcion" data-monto="" data-desc="Pago">
           <b>Otro monto</b><span>Lo capturas abajo</span></button>
@@ -1237,6 +1272,11 @@ function resultadoPago(tarjetaId, periodoId, monto){
          Te faltan <b>${money(e.faltante)}</b> de ${money(e.noInt)}. Sobre lo que quedó, el próximo
          corte te va a cobrar${t.tasaAnual?` alrededor de <b>${money(interesEstimado(t, num(p.saldoNuevo)-e.pagado))}</b>`:' intereses'}.
          Pagar el mínimo mantiene la tarjeta al corriente; no baja la deuda.</div>`
+    : e.clave === 'sinMensualidad'
+      ? `<div class="aviso rojo" style="margin:0">🔴 <b>Cubriste el pago mínimo, pero no la
+         mensualidad de tus compras a meses.</b> El estado de cuenta pedía <b>${money(e.min)}</b> y
+         abonaste ${money(e.pagado)}. Con esto tus compras diferidas empiezan a generar intereses
+         ordinarios el siguiente periodo. Te faltan <b>${money(e.min - e.pagado)}</b> para evitarlo.</div>`
     : e.clave === 'tardio'
       ? `<div class="aviso rojo" style="margin:0">🔴 <b>El pago llegó después de la fecha límite.</b>
          Bajó tu saldo, pero este corte ya generó intereses y puede traer comisión por pago tardío.</div>`
@@ -1432,6 +1472,8 @@ function formPeriodo(id, tarjetaPre){
         <input name="pagoNoIntereses" value="${p.pagoNoIntereses??''}" inputmode="decimal" placeholder="0.00"></div>
       <div class="field"><label>Saldo a meses (no exigible aún)</label>
         <input name="saldoDiferido" value="${p.saldoDiferido??''}" inputmode="decimal" placeholder="0.00"></div>
+      <div class="field"><label>Pago mínimo + compras a meses</label>
+        <input name="pagoMinimoConMeses" value="${p.pagoMinimoConMeses??''}" inputmode="decimal" placeholder="0.00"></div>
     </div>
     <div class="field"><label>Notas</label>
       <textarea name="nota" placeholder="Ej. cobro de $340 que no reconozco, aclaración folio 12345...">${esc(p.nota||'')}</textarea></div>
@@ -1449,7 +1491,8 @@ function formPeriodo(id, tarjetaPre){
         fechaLimitePago:v.fechaLimitePago || sumaDias(v.fechaCorte, num(tarjeta(v.tarjetaId)?.diasParaPagar)||20),
         saldoAnterior:num(v.saldoAnterior), saldoNuevo:num(v.saldoNuevo),
         pagoMinimo:num(v.pagoMinimo), pagoNoIntereses:num(v.pagoNoIntereses),
-        saldoDiferido:num(v.saldoDiferido), nota:v.nota};
+        saldoDiferido:num(v.saldoDiferido),
+        pagoMinimoConMeses:num(v.pagoMinimoConMeses), nota:v.nota};
       if(id) Object.assign(D.periodos.find(x=>x.id===id), obj);
       else D.periodos.push(Object.assign({id:uid(), creado:hoyISO()}, obj));
       cerrarModal(); refrescar(); aviso(id?'Estado de cuenta actualizado':'Estado de cuenta cargado ✓');
@@ -2066,7 +2109,8 @@ function aplicarLote(lote){
       fechaLimitePago: p.fechaLimitePago || sumaDias(p.fechaCorte, num(t.diasParaPagar)||20),
       saldoAnterior:num(p.saldoAnterior), saldoNuevo:num(p.saldoNuevo),
       pagoMinimo:num(p.pagoMinimo), pagoNoIntereses:num(p.pagoNoIntereses),
-      saldoDiferido:num(p.saldoDiferido), nota:p.nota||''};
+      saldoDiferido:num(p.saldoDiferido),
+      pagoMinimoConMeses:num(p.pagoMinimoConMeses), nota:p.nota||''};
     if(ya) Object.assign(ya, obj);
     else { D.periodos.push(Object.assign({id:uid(), creado:hoyISO()}, obj)); nuevosCortes++; }
   }

@@ -68,6 +68,17 @@ llegó tarde.
 > real, y el estado del corte se sigue calculando de los movimientos. Si apuntas
 > un pago que no hiciste, el saldo que te muestre la app va a ser mentira.
 
+**Ojo con el pago mínimo si traes compras a meses.** El estado de cuenta trae
+dos mínimos distintos: el *pago mínimo* a secas y el *pago mínimo + compras y
+cargos diferidos a meses*. El primero es el que salta a la vista y el que casi
+todos pagan, pero no incluye la mensualidad de tus compras diferidas — y el
+contrato dice que si no la pagas, **esas compras empiezan a generar intereses
+ordinarios**. Un saldo a meses sin intereses se convierte en uno con ellos.
+
+Por eso la app guarda los dos: cuando hay saldo a meses, el botón ofrece
+primero el mínimo con mensualidad y marca el otro en ámbar con la advertencia.
+Captura ambos en *Estados de cuenta*.
+
 Para pagos que no encajan ahí (una bonificación, un cargo que te devolvieron),
 usa *Movimientos → + Movimiento*.
 
