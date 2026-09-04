@@ -23,3 +23,19 @@ Este proyecto contiene la API utilizada para calcular el **scoring de riesgo cre
 ---
 
 ## 📁 Estructura del proyecto
+
+---
+
+## 💳 Control de Tarjetas de Crédito
+
+Además de la API de scoring, este repo incluye una herramienta independiente para
+llevar el control de tarjetas de crédito propias: estados de cuenta por tarjeta,
+gastos e ingresos, fechas de corte y pago, intereses y seguimiento de abonos.
+
+- **Ruta:** [`tarjetas/index.html`](tarjetas/index.html) — un solo archivo, sin dependencias.
+- **En línea:** `/tarjetas/` una vez desplegado en Vercel.
+- **Documentación:** [`tarjetas/README.md`](tarjetas/README.md)
+
+Concilia cada corte (`saldo anterior + cargos − abonos = saldo nuevo`) para detectar
+cobros que no cuadran, y desglosa cuánto de cada abono se va a intereses y cuánto
+baja el capital. No comparte datos con la API de scoring: los guarda en el navegador.
