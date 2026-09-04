@@ -209,7 +209,7 @@ details.card>summary .sub{font-weight:500}
 th.eq,td.eq{background:var(--acc-soft)}
 td.eq{border-bottom-color:var(--line)}
 th.eq:first-of-type,td.eq:first-of-type{border-radius:6px 0 0 6px}
-tr.totales td{border-top:2px solid var(--line);border-bottom:0;padding-top:11px}
+tfoot tr.totales td{border-top:2px solid var(--line);border-bottom:0;padding-top:11px}
 tr.totales:hover{background:none}
 
 /* Desglose tipo recibo: para seguir el dinero renglón por renglón */
@@ -1462,7 +1462,8 @@ function vCortes(){
             <button class="ico" onclick="detallePeriodo('${p.id}')" title="Ver detalle">🔍</button>
             <button class="ico" onclick="formPeriodo('${p.id}')" title="Editar">✎</button>
             <button class="ico" onclick="borrarPeriodo('${p.id}')" title="Eliminar">🗑</button></td>
-        </tr>`;}).join('')}
+        </tr>`;}).join('')}</tbody>
+      <tfoot>
         ${(()=>{ /* Sumas de lo mostrado: para eso pediste las columnas. */
           const con = todos.map(p => conciliar(p)).filter(c => c.movs.length);
           if(!con.length) return '';
@@ -1480,7 +1481,7 @@ function vCortes(){
             <td class="num pos"><b>${money(sp)}</b></td>
             <td></td><td></td><td></td>
           </tr>`; })()}
-      </tbody></table></div>`}
+      </tfoot></table></div>`}
 
     <div class="aviso azul" style="margin:16px 0 0">
       <b>Los dos "pagos" no son lo mismo, y por eso confunden.</b><br>
