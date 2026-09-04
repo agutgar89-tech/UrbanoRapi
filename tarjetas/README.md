@@ -45,7 +45,10 @@ Dos caminos:
 - **Automático**: me pasas el PDF del estado de cuenta y te devuelvo el JSON
   con todos los movimientos ya clasificados. Lo pegas en *Datos → Cargar un
   estado de cuenta ya vaciado* y entran todos de golpe. El formato está
-  documentado abajo.
+  documentado abajo. Funciona igual si el PDF viene escaneado y sin texto
+  seleccionable: las páginas se leen como imagen. En cualquiera de los dos
+  casos, cada corte se valida contra los totales impresos del propio estado de
+  cuenta antes de dártelo, así que un error de lectura no pasa silencioso.
 
 ### 4. Registra cada abono
 Cada vez que pagues, captúralo como movimiento tipo **Abono / Pago** con la fecha
