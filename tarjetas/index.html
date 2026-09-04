@@ -201,6 +201,19 @@ details.card>summary .sub{font-weight:500}
   box-shadow:0 4px 16px rgba(0,0,0,.25);line-height:1.45}
 #tip.on{opacity:1}
 
+/* Desglose tipo recibo: para seguir el dinero renglón por renglón */
+.libro{background:var(--panel-2);border:1px solid var(--line);border-left:3px solid var(--acc);
+  border-radius:10px;padding:14px 16px;margin:14px 0}
+.libro.entra{border-left-color:var(--ok)}
+.libro-t{font-size:13px;font-weight:680;margin-bottom:10px}
+.libro .ren{display:flex;align-items:baseline;gap:10px;padding:6px 0;font-size:14px}
+.libro .ren span{flex:1}
+.libro .ren b{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:14px;white-space:nowrap}
+.libro .ren em{font-style:normal;font-size:11.5px;color:var(--ok);white-space:nowrap}
+.libro .ren.tot{border-top:1px solid var(--line);margin-top:4px;padding-top:9px;font-weight:650}
+.libro .ren.tot b{font-size:16px}
+.libro-n{font-size:12.5px;color:var(--tx-2);line-height:1.55;margin-top:12px}
+
 /* Opciones de monto al registrar un pago */
 .ops{display:grid;gap:9px;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));margin-top:6px}
 .opcion{text-align:left;background:var(--panel-2);border:2px solid var(--line);border-radius:10px;
@@ -559,6 +572,19 @@ function estadoPago(p){
   return {pagado, tardio, total: pagado + tardio, puntuales, tardios, noInt,
           min, minBase, hayMeses, excedente,
           faltante: Math.max(0, noInt - pagado), venceEn, clave, etiqueta, clase};
+}
+
+/* El corte anterior a uno dado, si está cargado. */
+function cortePrevio(p){
+  return periodosDe(p.tarjetaId).find(x => (x.fechaCorte||'') < (p.fechaCorte||'')) || null;
+}
+/* Excedente que ESTE corte heredó del anterior. Verlo llegar es lo que cierra
+   la duda: el dinero sale de un corte y entra al siguiente. */
+function excedenteRecibido(p){
+  const prev = cortePrevio(p);
+  if(!prev) return null;
+  const e = estadoPago(prev);
+  return e.excedente > 0.5 ? {monto:e.excedente, corte:prev} : null;
 }
 
 /* El corte que sigue a uno dado, si ya está cargado. */
@@ -1395,7 +1421,7 @@ function vCortes(){
             ${e.hayMeses ? `<div class="sub">incluye ${money(minimoEfectivo(p)-e.minBase)} de mensualidad</div>` : ''}</td>
           <td class="num ${e.pagado>0?'pos':''}">${money(e.pagado)}
             ${e.tardio>0?`<div class="sub">+${money(e.tardio)} tarde</div>`:''}
-            ${e.excedente>0?`<div class="sub">${money(e.excedente)} de más → al corte siguiente</div>`:''}</td>
+            ${e.excedente>0?`<div class="sub">sobraron ${money(e.excedente)} →</div>`:''}</td>
           <td><span class="tag ${e.clase}">${e.etiqueta}</span></td>
           <td>${c.movs.length === 0 ? '<span class="tag gris">sin movs</span>'
               : c.cuadra ? '<span class="tag verde">✓ cuadra</span>'
@@ -1430,7 +1456,8 @@ function detallePeriodo(id){
                   : 'ninguno', e.total>0?'ok':'')}
     </div>
     <div class="grid g3" style="margin-bottom:16px">
-      ${kpi('Pago mínimo', money(p.pagoMinimo))}
+      ${kpi('Pago mínimo', money(minimoEfectivo(p)),
+        e.hayMeses ? `incluye ${money(minimoEfectivo(p)-e.minBase)} de mensualidad a meses` : '')}
       ${kpi('Pago sin intereses', money(p.pagoNoIntereses||p.saldoNuevo))}
       ${kpi('Vence', fechaCorta(p.fechaLimitePago), e.venceEn===null?'':(e.venceEn<0?`hace ${-e.venceEn} días`:`en ${e.venceEn} días`))}
     </div>
@@ -1451,15 +1478,36 @@ function detallePeriodo(id){
       <b>${money(e.tardio)}</b> después de la fecha límite: ese dinero bajó tu saldo pero
       ya no evitó los intereses de este corte.</div>` : ''}
 
+    ${(()=>{ const rec = excedenteRecibido(p);
+      return rec ? `<div class="libro entra">
+        <div class="libro-t">⬅ Este corte ya venía con dinero a favor</div>
+        <div class="ren"><span>Sobrante del corte del ${fechaCorta(rec.corte.fechaCorte)}</span>
+          <b class="pos">${money(rec.monto)}</b></div>
+        <div class="libro-n">Por eso este corte cerró más bajo de lo que sugerían tus compras:
+          ese dinero ya venía descontado.</div>
+      </div>` : ''; })()}
+
     ${e.excedente > 0 ? (()=>{ const sig = corteSiguiente(p);
-      return `<div class="aviso azul">💡 <b>Pagaste ${money(e.excedente)} de más.</b>
-        Ese excedente no se pierde ni se lo queda el banco: se resta del corte siguiente.
-        ${sig ? `De hecho, el corte del <b>${fechaCorta(sig.fechaCorte)}</b> cerró en
-          <b>${money(sig.saldoNuevo)}</b>; sin este excedente habría cerrado en
-          <b>${money(num(sig.saldoNuevo) + e.excedente)}</b>.`
-              : 'Lo verás cuando cargues el corte siguiente.'}
-        <br><br>El estado de cuenta no lo muestra aparte: lo mete dentro del renglón único de
-        <i>pagos y abonos</i>, y por eso parece que se esfumó.</div>`; })() : ''}
+      const sinExc = sig ? num(sig.saldoNuevo) + e.excedente : 0;
+      return `<div class="libro">
+        <div class="libro-t">¿A dónde se fue tu pago?</div>
+        <div class="ren"><span>Pagaste</span><b>${money(e.total)}</b></div>
+        <div class="ren"><span>− Saldo de este corte</span><b>${money(p.saldoNuevo)}</b></div>
+        <div class="ren tot"><span>= Te sobró</span><b class="pos">${money(e.excedente)}</b></div>
+
+        ${sig ? `<div class="libro-t" style="margin-top:18px">Y así llegó al corte del
+            ${fechaCorta(sig.fechaCorte)}</div>
+          <div class="ren"><span>Habría cerrado en</span><b>${money(sinExc)}</b></div>
+          <div class="ren"><span>− Tu sobrante</span><b class="pos">${money(e.excedente)}</b></div>
+          <div class="ren tot"><span>= Cerró en</span><b>${money(sig.saldoNuevo)}</b>
+            <em>✓ es justo lo que reporta el banco</em></div>`
+        : `<div class="libro-n" style="margin-top:14px">Se va a descontar del corte siguiente.
+             Lo verás en cuanto lo cargues.</div>`}
+
+        <div class="libro-n">Tu sobrante no se pierde ni se lo queda el banco. Lo que pasa es que el
+        estado de cuenta no le da un renglón propio: lo mete dentro de <i>pagos y abonos</i> del mes
+        siguiente, y por eso parece que se esfumó.</div>
+      </div>`; })() : ''}
 
     ${c.movs.length ? `
       <h3 style="font-size:14px;margin:18px 0 9px">Conciliación</h3>
