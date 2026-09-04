@@ -134,6 +134,20 @@ marca la diferencia exacta en rojo. Ahí tienes dos posibilidades:
 
 Da clic en 🔍 para ver el desglose completo, línea por línea.
 
+### "¿Cómo funciona esto?"
+La pestaña **Cómo funciona** dibuja el ciclo de cada tarjeta con tus fechas
+reales: los días de compras, el corte, los días que tienes para pagar sin
+intereses, y a partir de cuándo empiezan a cobrarte. Marca dónde estás hoy.
+
+Ahí se ve la regla que casi nadie usa a su favor: **cuántos días de crédito
+gratis te tocan depende del día en que compras**. Comprar el día después del
+corte da el máximo; comprar justo antes del corte, el mínimo. En una tarjeta
+con corte cada 30 días y 15 para pagar, eso es la diferencia entre 45 días y
+15 — la misma compra, tres veces menos plazo.
+
+Abajo está **la bola de nieve**: cuánto crecen tus saldos vencidos si no
+abonas nada, a 1, 3, 6 y 12 meses, con la tasa real de cada tarjeta.
+
 ### "¿En qué categoría estoy gastando más?"
 La pestaña **En qué gasto** es el tablero: cuánto llevas gastado, cuál es tu
 categoría número uno, cuánto te cuesta el banco y tu promedio mensual. Debajo,

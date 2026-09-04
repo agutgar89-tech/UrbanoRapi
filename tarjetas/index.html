@@ -212,6 +212,47 @@ th.eq:first-of-type,td.eq:first-of-type{border-radius:6px 0 0 6px}
 tfoot tr.totales td{border-top:2px solid var(--line);border-bottom:0;padding-top:11px}
 tr.totales:hover{background:none}
 
+/* Línea de tiempo del ciclo de la tarjeta */
+.tl{margin-top:6px;padding-bottom:6px}
+.tl-barra{display:flex;height:62px;border-radius:10px;overflow:visible;position:relative}
+.tl-seg{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;padding:6px 4px;overflow:hidden;position:relative;min-width:0}
+.tl-seg b{font-size:14px;font-weight:700;white-space:nowrap}
+.tl-seg span{font-size:11px;opacity:.9;line-height:1.25;margin-top:2px}
+.tl-seg.compras{background:var(--panel-2);border:2px solid var(--line);border-right:0;
+  border-radius:10px 0 0 10px;color:var(--tx)}
+.tl-seg.gracia{background:var(--ok);color:#fff}
+.tl-seg.caro{background:var(--tx);color:var(--bg);border-radius:0 10px 10px 0}
+@media (prefers-color-scheme:dark){ .tl-seg.caro{background:#000;color:#e8ebf0} }
+/* Marca de HOY: una línea vertical con etiqueta, para ubicarse de un vistazo */
+.tl-hoy{position:absolute;top:-12px;bottom:-12px;width:3px;background:var(--bad);
+  z-index:2;border-radius:2px}
+.tl-hoy span{position:absolute;top:-22px;left:50%;transform:translateX(-50%);
+  background:var(--bad);color:#fff;font-size:10.5px;font-weight:700;padding:2px 7px;
+  border-radius:5px;white-space:nowrap;letter-spacing:.03em}
+.tl-fechas{position:relative;height:34px;margin-top:14px}
+.tl-fechas span{position:absolute;transform:translateX(-50%);font-size:11.5px;color:var(--tx-2);
+  text-align:center;white-space:nowrap;line-height:1.35}
+.tl-fechas span:first-child{transform:none;text-align:left}
+.tl-fechas b{color:var(--tx);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+.tl-f{display:none}
+@media(max-width:640px){
+  /* Apilada: comprimir tres tramos con texto en 390px los vuelve ilegibles. */
+  .tl-barra{flex-direction:column;height:auto;gap:3px}
+  .tl-seg{width:100%!important;flex-direction:row;flex-wrap:wrap;align-items:baseline;
+    justify-content:flex-start;gap:0 8px;text-align:left;padding:11px 13px;border-radius:9px!important;
+    min-height:auto}
+  .tl-seg.compras{border-right:2px solid var(--line)}
+  .tl-seg b{font-size:14px}
+  .tl-seg span{font-size:12px;margin-top:0}
+  .tl-f{display:block;width:100%;font-style:normal;font-size:11px;opacity:.85;margin-top:3px;
+    font-family:var(--mono)}
+  .tl-seg.es-hoy{outline:3px solid var(--bad);outline-offset:2px}
+  .tl-seg.es-hoy::after{content:'HOY';position:absolute;top:8px;right:12px;background:var(--bad);
+    color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;letter-spacing:.04em}
+  .tl-hoy,.tl-fechas{display:none}
+}
+
 /* Desglose tipo recibo: para seguir el dinero renglón por renglón */
 .libro{background:var(--panel-2);border:1px solid var(--line);border-left:3px solid var(--acc);
   border-radius:10px;padding:14px 16px;margin:14px 0}
@@ -282,6 +323,7 @@ pre{font-family:var(--mono);font-size:12px;background:var(--panel-2);padding:12p
     <nav id="nav">
       <button data-t="resumen" class="on">Resumen</button>
       <button data-t="tarjetas">Tarjetas</button>
+      <button data-t="ciclo">Cómo funciona</button>
       <button data-t="movs">Movimientos</button>
       <button data-t="gastos">En qué gasto</button>
       <button data-t="cortes">Estados de cuenta</button>
@@ -295,6 +337,7 @@ pre{font-family:var(--mono);font-size:12px;background:var(--panel-2);padding:12p
 <div class="wrap">
   <section id="tab-resumen"></section>
   <section id="tab-tarjetas" class="hide"></section>
+  <section id="tab-ciclo" class="hide"></section>
   <section id="tab-movs" class="hide"></section>
   <section id="tab-gastos" class="hide"></section>
   <section id="tab-cortes" class="hide"></section>
@@ -641,7 +684,7 @@ function interesEstimado(t, saldo){
 /* ==========================================================================
    Navegación y ventanas modales
    ========================================================================== */
-const TABS = ['resumen','tarjetas','movs','gastos','cortes','ingresos','analisis','datos'];
+const TABS = ['resumen','tarjetas','ciclo','movs','gastos','cortes','ingresos','analisis','datos'];
 
 function ir(t){
   tabActual = t;
@@ -773,8 +816,8 @@ function cambioCategoria(el){
 }
 
 function render(){
-  const f = {resumen:vResumen, tarjetas:vTarjetas, movs:vMovs, gastos:vGastos, cortes:vCortes,
-             ingresos:vIngresos, analisis:vAnalisis, datos:vDatos}[tabActual];
+  const f = {resumen:vResumen, tarjetas:vTarjetas, ciclo:vCiclo, movs:vMovs, gastos:vGastos,
+             cortes:vCortes, ingresos:vIngresos, analisis:vAnalisis, datos:vDatos}[tabActual];
   if(f) $('tab-'+tabActual).innerHTML = f();
 }
 function refrescar(){ guardar(); render(); }
@@ -2158,6 +2201,160 @@ function clasificarConcepto(el){
   const n = aplicarAConcepto(concepto, cat);
   render();
   aviso(`${n} movimiento${n===1?'':'s'} de ${concepto} → ${cat} ✓`);
+}
+</script>
+
+<script>
+/* ==========================================================================
+   VISTA: Cómo funciona — la línea de tiempo de cada tarjeta, con tus fechas
+   Compras durante el periodo, el corte cierra la cuenta, tienes unos días
+   para pagarla sin costo, y a partir de ahí empiezan los intereses.
+   ========================================================================== */
+
+function vCiclo(){
+  if(!D.tarjetas.length)
+    return `<div class="card"><h2>Cómo funciona tu tarjeta</h2>
+      ${vacioMsg('Agrega una tarjeta y aquí verás su ciclo con tus fechas reales.',
+        '<button class="btn" onclick="formTarjeta()">+ Agregar tarjeta</button>')}</div>`;
+
+  return `<div class="card">
+    <h2>Cómo funciona tu tarjeta</h2>
+    <p class="sub" style="margin:0;max-width:760px">Una tarjeta de crédito te presta dinero
+    <b>gratis</b> durante unas semanas. El truco está en las fechas: <b>cuántos días gratis te
+    tocan depende del día en que compras</b>, y todo se acaba el día del pago. Abajo está el ciclo
+    de cada una de tus tarjetas, con tus fechas y tus montos.</p>
+  </div>
+  ${D.tarjetas.map(lineaTiempo).join('')}
+  <div class="card"><h2>La bola de nieve</h2>
+    ${bolaDeNieve()}
+  </div>`;
+}
+
+function lineaTiempo(t){
+  const p = periodosDe(t.id)[0];
+  const dias = num(t.diasParaPagar) || 20;
+  const hoy = hoyISO();
+
+  if(!p) return `<div class="card"><h2><span class="dot" style="background:${t.color}"></span>${esc(t.nombre)}</h2>
+    ${vacioMsg('Carga un estado de cuenta para ver su ciclo con fechas reales.')}</div>`;
+
+  const e = estadoPago(p);
+  /* El periodo de compras que cerró en este corte. */
+  const prev = cortePrevio(p);
+  const inicio = prev ? sumaDias(prev.fechaCorte, 1) : sumaDias(p.fechaCorte, -30);
+  const diasPeriodo = Math.max(1, diasEntre(inicio, p.fechaCorte));
+  /* La zona de intereses se dibuja del mismo largo que la ventana de pago. */
+  const zonaInt = Math.max(dias, 15);
+  const total = diasPeriodo + dias + zonaInt;
+  const pc = d => (d / total * 100);
+
+  /* Dónde cae hoy en esa línea. */
+  const desde = diasEntre(inicio, hoy);
+  const dentro = desde !== null && desde >= 0 && desde <= total;
+  const posHoy = dentro ? pc(desde) : (desde !== null && desde > total ? 100 : 0);
+
+  const falta = Math.max(0, num(e.noInt) - e.pagado);
+  const interes = interesEstimado(t, falta);
+
+  return `<div class="card">
+    <h2><span class="dot" style="background:${t.color}"></span>${esc(t.nombre)}
+      <span class="sub">corte los días ${t.diaCorte || '—'} · ${dias} días para pagar</span></h2>
+
+    <div class="tl">
+      ${(()=>{ /* En qué tramo cae hoy: en móvil la barra se apila y la línea
+           vertical deja de servir, así que se marca el tramo. */
+        const seg = !dentro && posHoy === 100 ? 2
+          : desde === null || desde < 0 ? -1
+          : desde <= diasPeriodo ? 0 : desde <= diasPeriodo + dias ? 1 : 2;
+        window.__segHoy = seg; return ''; })()}
+      <div class="tl-barra">
+        <div class="tl-seg compras${window.__segHoy===0?' es-hoy':''}" style="width:${pc(diasPeriodo)}%">
+          <b>${diasPeriodo} días</b><span>compras aquí</span>
+          <i class="tl-f">desde el ${fechaCorta(inicio)}</i></div>
+        <div class="tl-seg gracia${window.__segHoy===1?' es-hoy':''}" style="width:${pc(dias)}%">
+          <b>${dias} días</b><span>para pagar sin intereses</span>
+          <i class="tl-f">del ${fechaCorta(p.fechaCorte)} al ${fechaCorta(p.fechaLimitePago)}</i></div>
+        <div class="tl-seg caro${window.__segHoy===2?' es-hoy':''}" style="width:${pc(zonaInt)}%">
+          <b>después</b><span>aquí pagas intereses</span>
+          <i class="tl-f">a partir del ${fechaCorta(p.fechaLimitePago)}</i></div>
+        ${dentro || posHoy === 100 ? `<div class="tl-hoy" style="left:${posHoy.toFixed(2)}%">
+          <span>HOY ${fechaCorta(hoy)}</span></div>` : ''}
+      </div>
+      <div class="tl-fechas">
+        <span style="left:0">${fechaCorta(inicio)}</span>
+        <span style="left:${pc(diasPeriodo).toFixed(2)}%"><b>corte</b><br>${fechaCorta(p.fechaCorte)}</span>
+        <span style="left:${pc(diasPeriodo+dias).toFixed(2)}%"><b>vence</b><br>${fechaCorta(p.fechaLimitePago)}</span>
+      </div>
+    </div>
+
+    <div class="grid g3" style="margin-top:34px">
+      ${kpi('Si compras el día después del corte', `${diasPeriodo + dias} días`,
+        'es lo máximo de crédito gratis que da esta tarjeta', 'ok')}
+      ${(()=>{ const veces = (diasPeriodo + dias) / dias;
+        const txt = Math.abs(veces - Math.round(veces)) < 0.05
+          ? `${Math.round(veces)} veces` : `${veces.toFixed(1).replace('.',',')} veces`;
+        return kpi('Si compras justo antes del corte', `${dias} días`,
+          `la misma compra, ${txt} menos plazo`, 'warn'); })()}
+      ${kpi(e.venceEn >= 0 ? 'Te quedan' : 'Venció hace',
+        `${Math.abs(e.venceEn ?? 0)} día${Math.abs(e.venceEn ?? 0)===1?'':'s'}`,
+        `del corte del ${fechaCorta(p.fechaCorte)}`, e.venceEn >= 0 ? 'warn' : 'bad')}
+    </div>
+
+    ${falta > 0
+      ? `<div class="aviso ${e.venceEn >= 0 ? 'ambar' : 'rojo'}" style="margin:16px 0 0">
+          ${e.venceEn >= 0 ? '🟡' : '🔴'} Para cerrar este corte sin intereses te faltan
+          <b>${money(falta)}</b>${e.venceEn >= 0
+            ? ` y tienes hasta el <b>${fechaCorta(p.fechaLimitePago)}</b>.`
+            : `, y la fecha ya pasó: estás en la zona negra de la gráfica.`}
+          ${interes > 0 ? ` Sobre ese saldo, al ${num(t.tasaAnual)}% anual, el próximo corte te va a
+            cobrar alrededor de <b>${money(interes)}</b>.` : ''}
+          <button class="btn sm" style="margin-left:8px"
+            onclick="formPago('${t.id}','${p.id}')">Ya lo pagué</button></div>`
+      : `<div class="aviso verde" style="margin:16px 0 0">✅ Este corte está liquidado: no te va a
+          cobrar intereses. Es exactamente como debe usarse la tarjeta.</div>`}
+  </div>`;
+}
+
+/* Qué pasa si dejas correr el saldo sin abonar nada. */
+function bolaDeNieve(){
+  const conSaldo = D.tarjetas.map(t => {
+    const p = periodosDe(t.id)[0];
+    const falta = p ? Math.max(0, num(estadoPago(p).noInt) - estadoPago(p).pagado) : 0;
+    return {t, falta, tasa: num(t.tasaAnual)/100/12};
+  }).filter(x => x.falta > 0 && x.tasa > 0);
+
+  if(!conSaldo.length)
+    return '<div class="aviso verde" style="margin:0">✅ No tienes saldos venciendo sin pagar. ' +
+           'Mientras liquides cada corte, esta sección se queda vacía y ésa es la meta.</div>';
+
+  const meses = [1,3,6,12];
+  const fila = x => {
+    const vals = meses.map(m => x.falta * Math.pow(1 + x.tasa*(1+IVA), m));
+    return `<tr><td><span class="dot" style="background:${x.t.color}"></span>${esc(x.t.nombre)}
+        <div class="sub">${num(x.t.tasaAnual)}% anual</div></td>
+      <td class="num">${money(x.falta)}</td>
+      ${vals.map(v => `<td class="num neg">${money(v)}</td>`).join('')}
+      <td class="num neg"><b>+${money(vals[3] - x.falta)}</b></td></tr>`;
+  };
+  const tot = meses.map((m,i) => conSaldo.reduce((s,x) => s + x.falta*Math.pow(1+x.tasa*(1+IVA), m), 0));
+  const hoy = conSaldo.reduce((s,x)=>s+x.falta,0);
+
+  return `<p class="sub" style="margin:0 0 14px;max-width:760px">Si no abonas nada y dejas que el
+    interés se acumule sobre el interés, esto es lo que crecen tus saldos vencidos. No incluye
+    compras nuevas ni comisiones por pago tardío: sólo el efecto de no pagar.</p>
+    <div class="tw"><table>
+      <thead><tr><th>Tarjeta</th><th class="num">Hoy</th>
+        ${meses.map(m=>`<th class="num">En ${m} mes${m===1?'':'es'}</th>`).join('')}
+        <th class="num">Crecimiento</th></tr></thead>
+      <tbody>${conSaldo.sort((a,b)=>b.falta-a.falta).map(fila).join('')}</tbody>
+      <tfoot><tr class="totales"><td><b>Total</b></td>
+        <td class="num"><b>${money(hoy)}</b></td>
+        ${tot.map(v=>`<td class="num neg"><b>${money(v)}</b></td>`).join('')}
+        <td class="num neg"><b>+${money(tot[3]-hoy)}</b></td></tr></tfoot>
+    </table></div>
+    <div class="aviso ambar" style="margin:14px 0 0">💡 Esos ${money(tot[3]-hoy)} de un año no
+    compran nada. Es el precio de no pagar a tiempo, y crece solo aunque guardes las tarjetas en un
+    cajón.</div>`;
 }
 </script>
 
