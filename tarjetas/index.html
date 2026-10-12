@@ -2523,8 +2523,15 @@ function importar(obj){
 function aplicarLote(lote){
   if(!lote || typeof lote !== 'object') return;
   const nombre = String(lote.tarjeta || lote.nombreTarjeta || '').trim();
+  /* El nombre lo pones tú, así que un lote puede traerlo escrito distinto
+     ("LikeU VISA" contra "Santander LikeU") y acabaría creando una segunda
+     tarjeta con la mitad del historial en cada una. Los últimos 4 dígitos sí
+     son del banco, así que sirven de segunda llave. */
+  const llave4 = (b, u) => String(b||'').toLowerCase().trim() + '|' + String(u||'').trim();
   let t = D.tarjetas.find(x => x.id === lote.tarjetaId) ||
-          D.tarjetas.find(x => x.nombre.toLowerCase() === nombre.toLowerCase());
+          D.tarjetas.find(x => x.nombre.toLowerCase() === nombre.toLowerCase()) ||
+          (lote.ultimos4 ? D.tarjetas.find(x =>
+             x.ultimos4 && llave4(x.banco, x.ultimos4) === llave4(lote.banco, lote.ultimos4)) : null);
   if(!t){
     if(!nombre) return aviso('El lote no dice a qué tarjeta pertenece', 4000);
     t = {id:uid(), nombre, banco:lote.banco||'', ultimos4:lote.ultimos4||'',

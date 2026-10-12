@@ -232,7 +232,9 @@ El calendario de cortes y pagos te muestra todas las fechas por adelantado.
   `diferimiento` (saldo que se pasa a meses). Sólo `abono` cuenta como pago tuyo.
 - En `periodo` puedes incluir `saldoDiferido` con el saldo a meses del corte.
 - Fechas en `AAAA-MM-DD`.
-- Si la tarjeta no existe, se crea sola con el nombre de `tarjeta`.
+- La tarjeta se busca primero por nombre y, si no coincide, por `banco` +
+  `ultimos4`. Así un lote que traiga el nombre escrito distinto no te parte el
+  historial en dos tarjetas. Si no existe ninguna, se crea sola.
 - Si vuelves a cargar el mismo corte, los movimientos repetidos (misma fecha,
   monto y concepto) **se saltan**: no se duplica nada.
 - Puedes pegar un **arreglo** `[{...}, {...}]` para cargar varios meses de golpe.
@@ -270,3 +272,21 @@ completo, y también puedes bajar los movimientos en CSV para abrirlos en Excel.
 - **Qué cuenta como abono:** sólo el dinero que tú pagaste. Un cashback y un
   diferimiento a meses bajan el saldo del corte, pero no son tuyos, así que no
   entran en el cálculo de qué proporción de cada abono se va a intereses.
+
+---
+
+## Pruebas
+
+```
+node tarjetas/pruebas.mjs
+```
+
+Abre `index.html` en un Chromium de verdad, le carga estados de cuenta
+**inventados** y compara lo que calcula contra números hechos a mano: la
+conciliación de cada corte, los dos tipos de pago (el que cae dentro del periodo
+y el que liquida el corte), los dos mínimos cuando hay compras a meses, el
+excedente, qué cuenta como dinero tuyo y que cargar el mismo corte dos veces no
+duplique nada.
+
+Los datos de las pruebas son falsos a propósito: las cifras reales de nadie
+entran al repositorio.
