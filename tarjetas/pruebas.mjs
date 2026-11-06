@@ -197,6 +197,109 @@ revisa('filtrando la tarjeta 1111 quedan sus dos cortes', await enApp(() => {
   return D.periodos.filter(p => p.tarjetaId === t.id).length;
 }), 2);
 
+console.log('\nPalomear un cargo mientras pagas');
+revisa('un cargo nace sin palomita', await enApp(() =>
+  !!D.movimientos.find(m => m.descripcion === 'SUPER DEL BARRIO').cubierto), false);
+revisa('el botón lo marca y lo desmarca', await enApp(() => {
+  const m = D.movimientos.find(x => x.descripcion === 'SUPER DEL BARRIO');
+  marcarCubierto(m.id); const puesto = !!m.cubierto;
+  marcarCubierto(m.id); const quitado = !!m.cubierto;
+  marcarCubierto(m.id);
+  return [puesto, quitado].join('/');
+}), 'true/false');
+revisa('queda con la fecha de hoy', await enApp(() =>
+  D.movimientos.find(m => m.descripcion === 'SUPER DEL BARRIO').cubierto), iso(hoy));
+
+/* Lo más importante de esta función: una palomita es una lista de pendientes,
+   no un pago. Si moviera el saldo, la app mentiría igual que el banco. */
+console.log('\nPalomear NO mueve el saldo');
+revisa('el saldo de la tarjeta no cambió', await enApp(() => {
+  const t = D.tarjetas.find(x => x.ultimos4 === '1111');
+  const antes = saldoTarjeta(t.id);
+  const m = movsDe(t.id).find(x => x.descripcion === 'MUEBLERIA 03M');
+  marcarCubierto(m.id);
+  const despues = saldoTarjeta(t.id);
+  marcarCubierto(m.id);
+  return Math.round((despues - antes) * 100) / 100;
+}), 0);
+revisa('el corte sigue conciliando igual', await enApp(() => {
+  const p = D.periodos.find(x => x.fechaCorte === '2026-01-10');
+  const m = movsDelPeriodo(p);
+  const cargos = m.filter(x => TIPOS[x.tipo].suma === 1).reduce((a, b) => a + b.monto, 0);
+  const abonos = m.filter(x => TIPOS[x.tipo].suma === -1).reduce((a, b) => a + b.monto, 0);
+  return Math.round((p.saldoAnterior + cargos - abonos - p.saldoNuevo) * 100) / 100;
+}), 0);
+
+console.log('\nEl filtro de palomeo');
+revisa('"sin cubrir" deja fuera los pagos, que no se cubren', await enApp(() => {
+  filtros = LIMPIO(); filtros.cubierto = 'no';
+  const r = movsFiltrados().every(m => TIPOS[m.tipo].suma === 1 && !m.cubierto);
+  const hayPagos = movsFiltrados().some(esPago);
+  filtros = LIMPIO();
+  return [r, hayPagos].join('/');
+}), 'true/false');
+revisa('"ya cubiertos" trae exactamente los marcados', await enApp(() => {
+  const m = D.movimientos.find(x => x.descripcion === 'FARMACIA');
+  marcarCubierto(m.id);
+  filtros = LIMPIO(); filtros.cubierto = 'si';
+  const nombres = movsFiltrados().map(x => x.descripcion).sort().join(',');
+  filtros = LIMPIO();
+  return nombres;
+}), 'FARMACIA,SUPER DEL BARRIO');
+
+console.log('\nLa suma de lo palomeado es la que hay que pagar');
+revisa('cubierto = 800 + 100', await enApp(() => {
+  filtros = LIMPIO(); filtros.cubierto = 'si';
+  const v = movsFiltrados().reduce((a, b) => a + Math.abs(b.monto), 0);
+  filtros = LIMPIO();
+  return Math.round(v * 100) / 100;
+}), 900);
+
+console.log('\nQuitar palomitas respeta el filtro');
+revisa('sólo desmarca la tarjeta filtrada', await enApp(() => {
+  const t = D.tarjetas.find(x => x.ultimos4 === '1111');
+  filtros = LIMPIO(); filtros.tarjeta = t.id;
+  movsFiltrados().filter(m => m.cubierto).forEach(m => m.cubierto = '');
+  filtros = LIMPIO();
+  const quedan = D.movimientos.filter(m => m.cubierto).map(m => m.descripcion).join(',');
+  return quedan;
+}), '');
+
+console.log('\nLa tabla de Movimientos no se desalinea');
+revisa('cada fila trae tantas celdas como encabezados', await enApp(() => {
+  filtros = LIMPIO(); ir('movs');
+  const t = document.querySelector('#tab-movs table');
+  const cols = t.querySelectorAll('thead th').length;
+  const filas = [...t.querySelectorAll('tbody tr')];
+  return filas.length > 0 && filas.every(tr => tr.children.length === cols);
+}), true);
+revisa('un abono no trae botón de palomita', await enApp(() => {
+  const tr = [...document.querySelectorAll('#tab-movs tbody tr')]
+    .find(x => x.textContent.includes('PAGO RECIBIDO'));
+  return tr ? tr.children[0].querySelectorAll('button').length : -1;
+}), 0);
+revisa('un cargo sí lo trae', await enApp(() => {
+  const tr = [...document.querySelectorAll('#tab-movs tbody tr')]
+    .find(x => x.textContent.includes('SUPER DEL BARRIO'));
+  return tr ? tr.children[0].querySelectorAll('button.tick').length : -1;
+}), 1);
+
+console.log('\nLa pestaña de derechos');
+revisa('se dibuja sin reventar', await enApp(() => {
+  ir('derechos');
+  return $('tab-derechos').innerHTML.length > 2000;
+}), true);
+revisa('dice que la Disposición del RECO no aplica a bancos', await enApp(() =>
+  $('tab-derechos').textContent.includes('No aplica a bancos')), true);
+revisa('lista las comisiones capturadas', await enApp(() => {
+  aplicarLote({ tipo: 'estado_de_cuenta', tarjeta: 'Prueba Uno', ultimos4: '1111', banco: 'Banco Falso',
+    movimientos: [{ fecha: '2026-03-01', descripcion: 'PENALIZACION POR PAGO TARDIO',
+                    monto: 189, tipo: 'comision' }] });
+  ir('derechos');
+  return $('tab-derechos').textContent.includes('PENALIZACION POR PAGO TARDIO');
+}), true);
+await enApp(() => { ir('movs'); });
+
 await navegador.close(); servidor.close();
 console.log(`\n${pasaron} pruebas pasaron, ${fallaron.length} fallaron`);
 if (fallaron.length) { fallaron.forEach(f => console.log('  - ' + f)); process.exit(1); }

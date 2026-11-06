@@ -55,6 +55,15 @@ button.btn.danger{background:var(--bad)}
 button.btn.sm{padding:5px 10px;font-size:13px;border-radius:7px}
 .ico{background:none;border:0;color:var(--tx-3);cursor:pointer;padding:4px 6px;border-radius:6px;font-size:14px}
 .ico:hover{background:var(--panel-2);color:var(--tx)}
+.ico.tick{border:1px solid var(--line);border-radius:7px;width:30px;font-size:14px;line-height:1.1}
+.ico.tick.on{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
+tr.cubierto td{opacity:.55}
+tr.cubierto td.cob{opacity:1}
+tr.cubierto td:nth-child(3){text-decoration:line-through}
+.palomeo{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:13px;
+  background:var(--panel-2)}
+.palomeo .cab{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:9px}
+.palomeo .pie{display:flex;justify-content:space-between;gap:14px;margin-top:7px;font-size:13.5px}
 
 /* Paneles */
 .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:16px}
@@ -358,6 +367,7 @@ pre{font-family:var(--mono);font-size:12px;background:var(--panel-2);padding:12p
       <button data-t="cortes">Estados de cuenta</button>
       <button data-t="ingresos">Ingresos</button>
       <button data-t="analisis">¿Por qué no baja?</button>
+      <button data-t="derechos">Tus derechos</button>
       <button data-t="datos">Datos</button>
     </nav>
   </div>
@@ -372,6 +382,7 @@ pre{font-family:var(--mono);font-size:12px;background:var(--panel-2);padding:12p
   <section id="tab-cortes" class="hide"></section>
   <section id="tab-ingresos" class="hide"></section>
   <section id="tab-analisis" class="hide"></section>
+  <section id="tab-derechos" class="hide"></section>
   <section id="tab-datos" class="hide"></section>
 </div>
 
@@ -713,7 +724,7 @@ function interesEstimado(t, saldo){
 /* ==========================================================================
    Navegación y ventanas modales
    ========================================================================== */
-const TABS = ['resumen','tarjetas','ciclo','movs','gastos','cortes','ingresos','analisis','datos'];
+const TABS = ['resumen','tarjetas','ciclo','movs','gastos','cortes','ingresos','analisis','derechos','datos'];
 
 function ir(t){
   tabActual = t;
@@ -846,7 +857,8 @@ function cambioCategoria(el){
 
 function render(){
   const f = {resumen:vResumen, tarjetas:vTarjetas, ciclo:vCiclo, movs:vMovs, gastos:vGastos,
-             cortes:vCortes, ingresos:vIngresos, analisis:vAnalisis, datos:vDatos}[tabActual];
+             cortes:vCortes, ingresos:vIngresos, analisis:vAnalisis, derechos:vDerechos,
+             datos:vDatos}[tabActual];
   if(f) $('tab-'+tabActual).innerHTML = f();
 }
 function refrescar(){ guardar(); render(); }
@@ -1136,21 +1148,66 @@ function borrarTarjeta(id){
 /* ==========================================================================
    VISTA: Movimientos
    ========================================================================== */
-let filtros = {tarjeta:'', tipo:'', mes:'', cat:'', texto:''};
+let filtros = {tarjeta:'', tipo:'', mes:'', cat:'', cubierto:'', texto:''};
+const LIMPIO = () => ({tarjeta:'', tipo:'', mes:'', cat:'', cubierto:'', texto:''});
 
-function filaMov(m, conCategoria){
+/* El palomeo de un cargo: una lista para ir tachando mientras pagas, no un
+   movimiento. A propósito NO toca el saldo — si una palomita bajara la deuda
+   sin que entrara dinero, la app estaría mintiendo igual que el banco. */
+function marcarCubierto(id){
+  const m = D.movimientos.find(x => x.id === id);
+  if(!m) return;
+  m.cubierto = m.cubierto ? '' : hoyISO();
+  refrescar();
+}
+function desmarcarTodo(){
+  const marcados = movsFiltrados().filter(m => m.cubierto);
+  if(!marcados.length) return;
+  confirmar('Quitar las palomitas',
+    `Vas a desmarcar <b>${marcados.length} cargo${marcados.length===1?'':'s'}</b> de los que
+     estás viendo. No se borra ningún movimiento ni cambia tu saldo.`,
+    () => { marcados.forEach(m => m.cubierto = ''); refrescar(); });
+}
+
+/* Los filtros viven en un solo lugar para que la lista, las sumas y el botón de
+   desmarcar trabajen siempre sobre exactamente los mismos movimientos. */
+function movsFiltrados(){
+  return ordenados(D.movimientos.filter(m =>
+    (!filtros.tarjeta || m.tarjetaId === filtros.tarjeta) &&
+    (!filtros.tipo    || m.tipo === filtros.tipo) &&
+    (!filtros.mes     || (m.fecha||'').startsWith(filtros.mes)) &&
+    (!filtros.cat     || (filtros.cat === '__sin'
+                          ? !m.categoria && ['compra','disposicion'].includes(m.tipo)
+                          : m.categoria === filtros.cat)) &&
+    (!filtros.cubierto|| (filtros.cubierto === 'si'
+                          ? !!m.cubierto
+                          : !m.cubierto && (TIPOS[m.tipo]||{}).suma === +1)) &&
+    (!filtros.texto   || (m.descripcion||'').toLowerCase().includes(filtros.texto.toLowerCase()))));
+}
+
+/* `completa` es la fila de la pestaña Movimientos, con selector de categoría y
+   palomeo; el Resumen usa la fila corta. */
+function filaMov(m, completa){
   const t = TIPOS[m.tipo] || TIPOS.compra;
   const signo = t.suma > 0 ? '+' : '−';
   /* Sólo las compras se categorizan: un interés o un abono no son "gasto en algo". */
-  const editable = conCategoria && ['compra','disposicion'].includes(m.tipo);
-  return `<tr>
+  const editable = completa && ['compra','disposicion'].includes(m.tipo);
+  /* Un abono no se "cubre": lo que se va tachando mientras pagas son los cargos. */
+  const esCargo = t.suma > 0, listo = !!m.cubierto;
+  return `<tr class="${completa && listo ? 'cubierto' : ''}">
+    ${completa ? `<td class="cob" style="width:1%">${esCargo ? `<button
+        class="ico tick ${listo?'on':''}" onclick="marcarCubierto('${m.id}')"
+        aria-pressed="${listo}" title="${listo
+          ? 'Cubierto el '+fechaCorta(m.cubierto)+' · clic para desmarcar'
+          : 'Marcar como cubierto'}">${listo?'✓':'○'}</button>` : ''}</td>` : ''}
     <td style="white-space:nowrap">${fechaCorta(m.fecha)}</td>
     <td>${esc(m.descripcion||'(sin concepto)')}
       ${m.msi ? `<span class="tag azul">${esc(m.msi)} MSI</span>` : ''}
       ${m.nota ? `<span class="nota" tabindex="0" data-tip="${esc(m.nota)}"
         aria-label="Nota: ${esc(m.nota)}">ⓘ</span>` : ''}
-      ${!conCategoria && m.categoria ? `<div class="sub">${esc(m.categoria)}</div>` : ''}</td>
-    ${conCategoria ? `<td>${editable ? selectorCategoria(m)
+      ${!completa && m.categoria ? `<div class="sub">${esc(m.categoria)}</div>` : ''}
+      ${completa && listo ? `<div class="sub">✓ cubierto el ${fechaCorta(m.cubierto)}</div>` : ''}</td>
+    ${completa ? `<td>${editable ? selectorCategoria(m)
         : `<span class="sub">—</span>`}</td>` : ''}
     <td><span class="dot" style="background:${colTarjeta(m.tarjetaId)}"></span>${esc(nomTarjeta(m.tarjetaId))}</td>
     <td><span class="tag ${t.clase}">${t.etiqueta}</span></td>
@@ -1166,15 +1223,7 @@ function vMovs(){
       '<button class="btn" onclick="formTarjeta()">+ Agregar tarjeta</button>')}</div>`;
 
   const meses = [...new Set(D.movimientos.map(m => (m.fecha||'').slice(0,7)).filter(Boolean))].sort().reverse();
-  let lista = D.movimientos.filter(m =>
-    (!filtros.tarjeta || m.tarjetaId === filtros.tarjeta) &&
-    (!filtros.tipo    || m.tipo === filtros.tipo) &&
-    (!filtros.mes     || (m.fecha||'').startsWith(filtros.mes)) &&
-    (!filtros.cat     || (filtros.cat === '__sin'
-                          ? !m.categoria && ['compra','disposicion'].includes(m.tipo)
-                          : m.categoria === filtros.cat)) &&
-    (!filtros.texto   || (m.descripcion||'').toLowerCase().includes(filtros.texto.toLowerCase())));
-  lista = ordenados(lista);
+  const lista = movsFiltrados();
 
   const suma = arr => arr.reduce((s,m)=>s+Math.abs(num(m.monto)),0);
   const cargos = suma(lista.filter(m => (TIPOS[m.tipo]||{}).suma === +1));
@@ -1215,9 +1264,11 @@ function vMovs(){
         ${opciones(meses.map(m=>({v:m,t:mesLargo(m)})), filtros.mes, 'Todos')}</select></div>
       <div class="field"><label>Categoría</label><select onchange="filtros.cat=this.value;render()">
         ${opciones([{v:'__sin', t:'⚠ Sin categoría'}, ...CATEGORIAS()], filtros.cat, 'Todas')}</select></div>
+      <div class="field"><label>Palomeo</label><select onchange="filtros.cubierto=this.value;render()">
+        ${opciones([{v:'no',t:'○ Cargos sin cubrir'},{v:'si',t:'✓ Ya cubiertos'}], filtros.cubierto, 'Todos')}</select></div>
       <div class="field" style="flex:1;min-width:170px"><label>Buscar concepto</label>
         <input value="${esc(filtros.texto)}" placeholder="Ej. Oxxo" oninput="filtros.texto=this.value;clearTimeout(window._b);window._b=setTimeout(render,320)"></div>
-      ${Object.values(filtros).some(Boolean) ? `<button class="btn sm ghost" onclick="filtros={tarjeta:'',tipo:'',mes:'',cat:'',texto:''};render()">Limpiar</button>` : ''}
+      ${Object.values(filtros).some(Boolean) ? `<button class="btn sm ghost" onclick="filtros=LIMPIO();render()">Limpiar</button>` : ''}
     </div>
     <div class="grid ${ajustes>0?'g4':'g3'}" style="margin-bottom:14px">
       ${kpi('Cargos', money(cargos), 'lo que subió tu deuda', cargos>0?'bad':'')}
@@ -1236,8 +1287,32 @@ function vMovs(){
       que debes: mueve <b>${money(diferido)}</b> del saldo que te exigen este corte al saldo a meses,
       y lo sigues debiendo con intereses. El neto de arriba mide el saldo exigible, no tu deuda total
       — ésa la ves en <b>Tarjetas</b>.</div>` : ''}
+    ${(()=>{
+      /* Palomeo: de los cargos que estás viendo, cuáles ya diste por cubiertos.
+         Sirve para ir tachando mientras pagas y para saber cuánto suma lo que
+         llevas marcado, que es justo el monto que tienes que mandar al banco. */
+      const cargosL = lista.filter(m => (TIPOS[m.tipo]||{}).suma === +1);
+      if(!cargosL.length) return '';
+      const listos = cargosL.filter(m => m.cubierto), faltan = cargosL.filter(m => !m.cubierto);
+      const vListos = suma(listos), vFaltan = suma(faltan);
+      return `<div class="palomeo">
+        <div class="cab"><b>Lo que llevas cubierto</b>
+          <span class="sub">${listos.length} de ${cargosL.length} cargos</span>
+          <span class="sp"></span>
+          ${listos.length ? `<button class="btn sm ghost" onclick="desmarcarTodo()">Quitar palomitas</button>` : ''}</div>
+        <div class="mini"><i style="width:${cargos>0?(vListos/cargos*100).toFixed(1):0}%;background:var(--ok)"></i></div>
+        <div class="pie"><span>Cubierto <b class="num pos">${money(vListos)}</b></span>
+          <span>Falta <b class="num neg">${money(vFaltan)}</b></span></div>
+        ${listos.length ? `<div class="sub" style="margin-top:10px;line-height:1.55">
+          Palomear <b>no mueve tu saldo</b>: es tu lista para no perderte mientras pagas. Para que la
+          deuda baje de verdad hay que registrar el abono.
+          ${filtros.tarjeta
+            ? `<button class="btn sm" style="margin-left:4px" onclick="formPago('${filtros.tarjeta}',
+                null, ${vListos.toFixed(2)}, 'Pago de cargos palomeados')">💵 Registrar abono de ${money(vListos)}</button>`
+            : ' Filtra por una tarjeta y aquí te aparece el botón para registrarlo con esa suma.'}</div>` : ''}
+      </div>`; })()}
     ${lista.length ? `<div class="tw"><table>
-      <thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Tarjeta</th><th>Tipo</th>
+      <thead><tr><th></th><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Tarjeta</th><th>Tipo</th>
         <th class="num">Monto</th><th></th></tr></thead>
       <tbody>${lista.map(m => filaMov(m, true)).join('')}</tbody></table></div>`
       : vacioMsg('No hay movimientos con esos filtros.')}
@@ -1299,7 +1374,9 @@ function formMovimiento(id, tarjetaPre){
    del corte (si libró intereses, si sólo cubrió el mínimo) se sigue calculando
    de los movimientos y no de una casilla que puede mentir.
    ========================================================================== */
-function formPago(tarjetaId, periodoId){
+/* `preMonto` y `preDesc` llegan desde el palomeo de Movimientos: el monto ya
+   viene sumado de los cargos que marcaste, para no volver a teclearlo. */
+function formPago(tarjetaId, periodoId, preMonto, preDesc){
   const t = tarjeta(tarjetaId);
   if(!t) return aviso('Elige una tarjeta');
   const p = periodoId ? D.periodos.find(x => x.id === periodoId) : periodosDe(tarjetaId)[0];
@@ -1370,12 +1447,14 @@ function formPago(tarjetaId, periodoId){
     <div class="fgrid" style="margin-top:14px">
       <div class="field"><label>Monto pagado *</label>
         <input name="monto" id="montoPago" inputmode="decimal" placeholder="0.00"
-          value="${ops.length && ops[iSugerida].m ? ops[iSugerida].m.toFixed(2) : ''}"></div>
+          value="${num(preMonto) ? num(preMonto).toFixed(2)
+                    : (ops.length && ops[iSugerida].m ? ops[iSugerida].m.toFixed(2) : '')}"></div>
       <div class="field"><label>Fecha del pago *</label>
         <input type="date" name="fecha" value="${hoy}"></div>
     </div>
     <div class="field"><label>Concepto</label>
-      <input name="descripcion" id="descPago" value="${ops.length ? esc(ops[iSugerida].d) : 'Pago'}"></div>
+      <input name="descripcion" id="descPago" value="${esc(preDesc
+        || (ops.length ? ops[iSugerida].d : 'Pago'))}"></div>
     <input type="hidden" name="tarjetaId" value="${tarjetaId}">
     <p class="sub" style="margin:0">Confirma sólo pagos que ya hiciste. Esto registra un abono real:
     si lo apuntas y no lo hiciste, el saldo que te muestre la app va a ser mentira.</p>
@@ -2402,6 +2481,291 @@ function bolaDeNieve(){
     <div class="aviso ambar" style="margin:14px 0 0">💡 Esos ${money(tot[3]-hoy)} de un año no
     compran nada. Es el precio de no pagar a tiempo, y crece solo aunque guardes las tarjetas en un
     cajón.</div>`;
+}
+</script>
+
+<script>
+/* ==========================================================================
+   VISTA: Tus derechos — qué sí y qué no te pueden cobrar
+
+   El texto de los artículos viene del "Marco Legal" del Registro de Comisiones
+   (RECO) de la CONDUSEF. Es un extracto: se quitó la navegación del sitio y un
+   bloque de la LPDUSF que esa página repite dos veces.
+
+   Lo importante al leerlo: la Disposición en materia de Registros NO aplica a
+   los bancos. Su Título del RECO (artículos 100 en adelante) obliga a SOFOM
+   E.N.R., sociedades financieras populares y comunitarias, cooperativas de
+   ahorro y préstamo y uniones de crédito. Santander, Banorte y Banregio son
+   instituciones de crédito: registran sus comisiones ante el Banco de México
+   (artículo 6 de la LTOSF) y sus prohibiciones viven en la Circular 22/2010.
+   ========================================================================== */
+
+const LEYES = [
+{sigla:'LTOSF', aplica:'si', color:'verde',
+ nombre:'Ley para la Transparencia y Ordenamiento de los Servicios Financieros',
+ pie:'Aplica a los bancos. Es la que manda que registren sus comisiones ante el Banco de México.',
+ arts:[
+ {n:'Artículo 6', t:`Las instituciones de crédito y las sociedades financieras de objeto múltiple reguladas, así como las instituciones de tecnología financiera, deberán registrar ante el Banco de México las Comisiones que pretendan cobrar por los servicios de pago y créditos que ofrecen al público, así como sus respectivas modificaciones. Dicho registro se realizará con al menos treinta días naturales de anticipación a la entrada en vigor de las nuevas Comisiones o de las modificaciones a las previamente registradas cuando impliquen un incremento.
+
+Para el caso de reducción del monto de dichas Comisiones, el registro deberá realizarse con al menos dos días naturales de anticipación a su entrada en vigor.
+
+El Banco de México tendrá la facultad de formular observaciones a la aplicación de dichas Comisiones cuando sean nuevas o impliquen un incremento, dentro de los quince días hábiles siguientes a aquél en que las citadas Entidades Financieras las hagan de su conocimiento. Antes de ejercer la citada facultad el Banco de México escuchará a la entidad de que se trate. El Banco de México hará públicas las observaciones que en su caso formule conforme a este párrafo. En el supuesto de que el Banco de México haya formulado y publicado observaciones en cuanto a la creación o incremento de las Comisiones, y las entidades a que se refiere el primer párrafo de este artículo, decidan aplicar las nuevas comisiones o el incremento observado, el Banco de México podrá vetarlo. De no existir observaciones, las Comisiones entrarán en vigor.
+
+Las atribuciones conferidas al Banco de México en los párrafos anteriores del presente artículo, se entenderán otorgadas a la Comisión Nacional para la Protección y Defensa de los Usuarios de Servicios Financieros respecto de las sociedades financieras de objeto múltiple no reguladas, las sociedades financieras populares, las sociedades financieras comunitarias, las sociedades cooperativas de ahorro y préstamo y las uniones de crédito.
+
+El Banco de México compartirá con la Comisión Nacional para la Protección y Defensa de los Usuarios de Servicios Financieros la información de las Comisiones registradas en términos del presente artículo, a través de los medios que se pacten para tales efectos, con la finalidad de que dicha Comisión las dé a conocer en su página electrónica en la red mundial "Internet".`},
+]},
+
+{sigla:'LPDUSF', aplica:'si', color:'verde',
+ nombre:'Ley de Protección y Defensa al Usuario de Servicios Financieros',
+ pie:'Aplica a los bancos. Es la ley de la CONDUSEF: por aquí van las quejas, las aclaraciones y el arbitraje.',
+ arts:[
+ {n:'Artículo 1', t:`La presente Ley tiene por objeto la protección y defensa de los derechos e intereses del público usuario de los servicios financieros, que prestan las instituciones públicas, privadas y del sector social debidamente autorizadas, así como regular la organización, procedimientos y funcionamiento de la entidad pública encargada de dichas funciones.`},
+ {n:'Artículo 3', t:`Esta Ley es de orden público, interés social y de observancia en toda la República, de conformidad con los términos y condiciones que la misma establece. Los derechos que otorga la presente Ley son irrenunciables.`},
+ {n:'Artículo 4', t:`La protección y defensa de los derechos e intereses de los Usuarios, estará a cargo de un organismo público descentralizado con personalidad jurídica y patrimonio propios, denominado Comisión Nacional para la Protección y Defensa de los Usuarios de Servicios Financieros, con domicilio en el Distrito Federal.
+
+La protección y defensa que esta Ley encomienda a la Comisión Nacional, tiene como objetivo prioritario procurar la equidad en las relaciones entre los Usuarios y las Instituciones Financieras, otorgando a los primeros elementos para fortalecer la seguridad jurídica en las operaciones que realicen y en las relaciones que establezcan con las segundas.`},
+ {n:'Artículo 5', t:`La Comisión Nacional para la Protección y Defensa de los Usuarios de Servicios Financieros tendrá como finalidad promover, asesorar, proteger y defender los derechos e intereses de los Usuarios frente a las Instituciones Financieras, arbitrar sus diferencias de manera imparcial y proveer a la equidad en las relaciones entre éstos, así como supervisar y regular de conformidad con lo previsto en las leyes relativas al sistema financiero, a las Instituciones Financieras, a fin de procurar la protección de los intereses de los Usuarios.`},
+ {n:'Artículo 8', t:`La Comisión Nacional, con la información que le proporcionen las autoridades competentes y las Instituciones Financieras, establecerá y mantendrá actualizado un Registro de Prestadores de Servicios Financieros, en los términos y condiciones que señala esta Ley.
+
+Asimismo, la Comisión Nacional establecerá y mantendrá actualizada una Base de Datos de comisiones que le sean reportadas y que comprenderá sólo las comisiones vigentes que efectivamente cobren, misma que se dará a conocer al público en general, por el medio de difusión que la Comisión Nacional considere pertinente.`},
+ {n:'Artículo 11 (extracto)', t:`La Comisión Nacional está facultada para:
+
+XVIII. Revisar y ordenar modificaciones a los contratos de adhesión utilizados por Instituciones Financieras para la celebración de sus operaciones o la prestación de sus servicios, en caso de que incumplan con las disposiciones de carácter general que establezca la Comisión Nacional;
+
+XIX. Revisar y ordenar a las Instituciones Financieras, modificaciones a los documentos que se utilicen para informar a los Usuarios sobre el estado que guardan las operaciones o servicios contratados, en caso de que incumplan con las disposiciones de carácter general que establezca la Comisión Nacional;
+
+XXVII. Publicar en la página electrónica de la Comisión Nacional la información relativa a las comisiones que cobra cada Institución Financiera, mismas que éstas previamente presentaron ante la Comisión y vigilar la evolución de las comisiones o cargos máximos y mínimos causados por las operaciones y servicios que presten las Instituciones Financieras para darlos a conocer al público en general. La Comisión Nacional publicará las comisiones más representativas o de relevancia a través de cuadros comparativos de carácter trimestral en medios masivos de comunicación;
+
+XXVIII. Vigilar y verificar el cumplimiento de las disposiciones contenidas en esta Ley y en las leyes relativas al sistema financiero, en el ámbito de su competencia, así como, en su caso, determinar los criterios para la verificación de su cumplimiento;
+
+XXXIII. Supervisar a las Instituciones Financieras en relación a las normas de protección al usuario de servicios financieros cuando tal atribución le esté conferida en las leyes relativas al sistema financiero.`},
+ {n:'Artículo 12', t:`Para el debido cumplimiento de las facultades que esta Ley atribuye a la Comisión Nacional, las Instituciones Financieras, las unidades administrativas de la Secretaría, las Comisiones Nacionales, así como las demás dependencias y entidades de la Administración Pública Federal y órganos constitucionales autónomos que tengan competencia en materia financiera, deberán proporcionarle la información y documentación que se les solicite, en el ámbito de su competencia, en términos de los convenios de intercambio de información en los que se determinen los términos y condiciones a los que deberán sujetarse para llevar a cabo el citado intercambio de información.`},
+ {n:'Artículo 53', t:`Las Instituciones Financieras deberán proporcionar la información que les solicite la Comisión Nacional, para el cumplimiento de su objeto en los términos y plazos que ésta señale, en caso contrario, se harán acreedoras a las sanciones que establece esta Ley.`},
+ {n:'Artículo 58', t:`De igual forma, la Comisión Nacional podrá ordenar a las Instituciones Financieras que le informen sobre las características de las operaciones que formalicen con contratos de adhesión, a efecto de que éste pueda informar a los Usuarios sobre dichas características.`},
+ {n:'Artículo 92 Bis 1', t:`Las Instituciones Financieras sujetas a la supervisión de la Comisión Nacional respecto del cumplimiento de esta Ley, así como de otras Leyes en las que expresamente se le confiera tal supervisión, estarán obligadas a proporcionarle la información que la misma estime necesaria, en el ámbito de su competencia, en la forma y términos que les señale, así como a permitir el acceso de la Comisión Nacional a sus oficinas, locales y demás instalaciones, cuando proceda.`},
+ {n:'Artículo 93', t:`El incumplimiento o la contravención a las disposiciones previstas en esta Ley, será sancionado con multa que impondrá administrativamente la Comisión Nacional, tomando como base el salario mínimo general diario vigente en el Distrito Federal, en el momento de cometerse la infracción de que se trate.`},
+ {n:'Artículo 94 (extracto)', t:`La Comisión Nacional estará facultada para imponer las siguientes sanciones:
+
+II. Multa de 200 a 1000 días de salario, a la Institución Financiera que no proporcione la información o la documentación que le solicite la Comisión Nacional, para el cumplimiento de su objeto, de acuerdo con los artículos 12, 49, 53, 58 y 92 Bis 1 de esta Ley;
+
+XI. Multa de 500 a 2000 días de salario, a la Institución Financiera que cobre cualquier comisión que no se haya reportado a la Comisión Nacional para su inserción en la Base de Datos de las Comisiones que cobren las Instituciones Financieras, prevista en esta Ley.`},
+]},
+
+{sigla:'Disposición RECO', aplica:'no', color:'ambar',
+ nombre:'Disposición en materia de Registros ante la CONDUSEF — Título del RECO',
+ pie:'NO aplica a los bancos. Su artículo 100 la limita a SOFOM E.N.R., sociedades financieras populares y comunitarias, cooperativas de ahorro y préstamo y uniones de crédito. Para un banco, el equivalente es la Circular 22/2010 del Banco de México.',
+ arts:[
+ {n:'Artículo 2 (definiciones útiles)', t:`IX. Cartera Vigente: A todos los Créditos otorgados por las Entidades Financieras en los que los Usuarios están al corriente en los pagos del Crédito adquirido, tanto del monto principal como de los intereses;
+
+X. Cartera Vencida: A todos los Créditos otorgados por las Entidades Financieras que no han sido pagados por los Usuarios en los términos pactados originalmente;
+
+XVII. Comisión: A cualquier cargo, independientemente de su denominación o modalidad, diferente al interés, que las Entidades Financieras cobran a los Usuarios por operaciones pasivas, activas o de servicios, incluidos los cargos por el uso o aceptación de medios de disposición.`},
+ {n:'Artículo 3, fracción V', t:`El título OCTAVO, correspondiente al RECO, es aplicable a las siguientes Entidades Financieras: SOFOM ENR, Sociedades Financieras Populares, Sociedades Financieras Comunitarias, Sociedades Cooperativas de Ahorro y Préstamo y Uniones de crédito.`},
+ {n:'Artículo 10', t:`La información proporcionada en cada uno de los Registros y sistemas, es responsabilidad de las Instituciones Financieras, en cuanto a la veracidad y certeza de la misma, conforme a las disposiciones que regulan a cada Registro o sistema en la presente Disposición.`},
+ {n:'Artículo 100', t:`El presente Título le es aplicable a las siguientes Entidades Financieras: SOFOM ENR, Sociedades Financieras Populares, Sociedades Financieras Comunitarias, Sociedades Cooperativas de Ahorro y Préstamo y Uniones de crédito, por lo que para efectos de este Título las referencias a Entidades Financieras se entenderán realizadas a éstas.
+
+El RECO tiene como objetivo difundir al público en general las Comisiones que cobran las Entidades Financieras por los productos y servicios que ofrecen, sus respectivas modificaciones, y por la información respecto a la Cartera Total de Crédito, tanto Vigente como Vencida, y el Número de Contratos.`},
+ {n:'Artículo 102 — comisiones prohibidas', t:`Las Entidades Financieras tienen prohibido cobrar Comisiones por importes mayores a los registrados, así como registrar Comisiones por los siguientes conceptos:
+
+I. Por pago tardío de un crédito, no pago o cualquier otro concepto equivalente, cuando se cobren intereses moratorios durante el mismo período; en tal caso, se deberá precisar en el contrato respectivo, cuándo se cobra el interés moratorio y cuándo la Comisión respectiva;
+
+II. Por no utilizar durante un año calendario la tarjeta de crédito si durante el mismo período se cobra una Comisión por anualidad o algún otro concepto equivalente;
+
+III. Por las gestiones que las Entidades Financieras realicen para que se proceda a la cancelación de la hipoteca ante el Registro Público de la Propiedad, con excepción de los impuestos o pago de derechos, cuando corresponda, así como para el registro de las prendas o garantías ante Fedatario Público o Notario Público;
+
+IV. Comisiones cuyo importe se determine utilizando una de varias operaciones o fórmulas de cálculo en relación con créditos, salvo que la Comisión que se cobre sea la más baja;
+
+V. Por la cancelación de una o varias tarjetas de crédito emitidas al amparo de un contrato de apertura de crédito ni, en su caso, por la rescisión del contrato de apertura de crédito revolvente correspondiente;
+
+VI. Por la recepción del pago periódico total o parcial de créditos otorgados por la misma Entidad Financiera, en las ventanillas de sus sucursales, a través de sus cajeros automáticos, de transferencias electrónicas de fondos, ni por domiciliación, excepto las que cobren otras entidades, instituciones de crédito o empresas con las que se tengan celebrados contratos para la recepción de dichos pagos;
+
+VII. Por el incumplimiento del pago periódico de un crédito, salvo que la Comisión no exceda del monto que resulte menor de: a) El importe de dicho incumplimiento; y b) El importe que la institución de crédito determine y registre en la CONDUSEF;
+
+VIII. Por pago tardío, no pago o cualquier otro concepto equivalente, cuando por causas imputables a la Entidad Financiera ésta no haya acreditado el pago de algún crédito en términos de lo previsto en la Circular 22/2008 emitida por el Banco de México, sus modificaciones o aquella que la sustituya, la cual establece las fechas en las que deben acreditarse los pagos dependiendo del medio que se haya utilizado para hacerlos;
+
+IX. Por concepto de sobregiro o intento de sobregiro en créditos, préstamos o financiamientos revolventes asociados a una tarjeta, así como en créditos personales de liquidez sin garantía real;
+
+X. Por operaciones de transferencia de fondos y domiciliación por una Entidad Financiera distinta a la originadora de la operación;
+
+XI. En el caso de devoluciones de transferencias de fondos y domiciliación, la Comisión no podrá exceder del importe que, en su caso, se haya cobrado al Usuario por su emisión;
+
+XII. Por la cancelación de la domiciliación del pago de bienes y servicios;
+
+XIII. Por retiros de efectivo y consultas de saldo en sus oficinas o sucursales, así como por consulta de saldo en ventanilla;
+
+XIV. Por recibir y abonar recursos en las cuentas de depósito de sus Usuarios, a través de las ventanillas de sus sucursales y de los cajeros automáticos de las propias Entidades Financieras;
+
+XV. Por la devolución, por cualquier causa, de cheques que hayan recibido como medio de pago de algún crédito del cual sean acreedoras;
+
+XVI. En ningún caso podrán cobrarse comisiones a un cliente, por haber depositado en su cuenta, cheques que sean devueltos por cualquier causa;
+
+XVII. Tratándose de órdenes de transferencia de fondos, las Entidades Financieras no podrán cobrar comisiones diferenciadas en función del monto de las transferencias que le soliciten sus clientes;
+
+XVIII. Las Entidades Financieras no podrán cobrar más de una Comisión por un mismo acto, hecho o evento generador del cargo. Este mismo principio aplicará cuando así lo determine la CONDUSEF tratándose de actos, hechos o eventos en los que intervengan más de una Entidad Financiera;
+
+XIX. Que inhiban la movilidad, migración o portabilidad de los Usuarios de una Entidad Financiera a otra; y
+
+XX. Las Entidades Financieras no podrán cobrar Comisiones que no se vinculen directamente con un producto o a un servicio prestado al Usuario, o con una operación que éste haya realizado.
+
+El incumplimiento a dichas prohibiciones dará lugar a las sanciones establecidas en el artículo 175 de la presente Disposición.`},
+ {n:'Artículos 103 a 110 — autorizaciones y observaciones', t:`Artículo 103. La CONDUSEF autorizará el uso o registro de una Comisión o su modificación cuando la Entidad Financiera acredite la procedencia del mismo. La CONDUSEF emitirá la autorización, rechazo u observaciones a las Comisiones en un plazo no mayor de 15 días hábiles siguientes a la solicitud de su registro, y en caso de que sea autorizada la misma será visible al público en el RECO.
+
+Artículo 105. Las Observaciones que realice la CONDUSEF respecto a la solicitud de registro, modificación o uso de una Comisión, se sujetarán a lo siguiente: I. Que la Comisión no cumpla con la normativa vigente; II. Que no se justifique la creación o modificación de la Comisión; III. Que la Comisión derive de conceptos ajenos a las operaciones registradas en el Contrato de Adhesión; IV. Las Entidades Financieras no podrán cobrar más de una Comisión por un mismo acto, hecho o evento; V. Que su importe sea notoriamente excesivo en relación a las Comisiones del mercado por el mismo sector, tipo de crédito y concepto; VI. Que inhiban la movilidad, migración o portabilidad de los Usuarios de una Entidad Financiera a otra; o VII. Que la Comisión no se vincule con un servicio prestado al Usuario, o a una operación que éste haya realizado.
+
+Artículo 106. Las Observaciones que la CONDUSEF formule respecto de alguna Comisión se harán llegar a la Entidad Financiera, a través del RECO, en un plazo máximo de 15 días hábiles siguientes a la fecha en que se haya solicitado el registro de la Comisión o de la modificación correspondiente. En caso de solicitudes por nuevos conceptos, el plazo no será mayor a 45 días hábiles.
+
+Artículo 109. Cuando las Entidades Financieras soliciten el registro de alguna Comisión o modificación no autorizadas con anterioridad, o se encuentren en los supuestos del artículo 105, la CONDUSEF podrá ejercer el Veto de manera unilateral.
+
+Artículo 110. La CONDUSEF podrá solicitar la eliminación de Comisiones a las Entidades Financieras en cualquier momento, cuando no cumplan con la normativa aplicable.`},
+ {n:'Artículos 111 a 114 — registro y vigencia', t:`Artículo 111. El RECO representa el único medio oficial para el registro de las Comisiones que las Entidades Financieras cobran a sus clientes por los productos y servicios que ofrecen.
+
+Artículo 112. Las Entidades Financieras son responsables del cálculo correcto de las Comisiones que registren en el RECO y de los datos de la Cartera Total, Vigente y Vencida, así como el Número de Contratos.
+
+Artículo 113. Las Entidades Financieras deben, al momento de inscribir una Comisión en el RECO: I. Registrar o modificar, cuando ésta represente un incremento, con al menos 30 días naturales de anticipación a la fecha en que entren en vigor; II. Actualizar, cuando ésta represente una disminución, con al menos 2 días naturales de anticipación; y III. Cualquier registro de una Comisión se entenderá como una mera solicitud.
+
+Artículo 114. Las Comisiones que las Entidades Financieras cobren por los productos y servicios financieros que ofrezcan y que se indiquen, de ser el caso, en los Contratos de Adhesión, carátulas, estados de cuenta, Publicidad, página web, folletos, así como cualquier otro medio, deben corresponder con las que las Entidades Financieras tengan registradas en el RECO.`},
+ {n:'Artículo 175 — sanciones', t:`El incumplimiento de las Entidades Financieras a las obligaciones establecidas en el artículo 12, fracción V, y en el Título OCTAVO de la presente Disposición se sancionará, en términos de los artículos 94, fracción II de la LPDUSF respecto a los incumplimientos relativos al registro de la Cartera Total, Vigente y Vencida, así como del Número de Contratos, y 40, 41, 42, fracción I y 43, fracciones IV y XI de la LTOSF, respecto a los incumplimientos relativos al registro de Comisiones.`},
+]},
+];
+
+/* Las reglas que de verdad le sirven a alguien con tarjeta de banco, con la
+   norma que las sostiene para un banco (no la del RECO, que no le aplica). */
+const REGLAS = [
+ {t:'No te pueden cobrar comisión por pago tardío si en el mismo periodo ya te cobraron intereses moratorios',
+  d:'Es un doble cobro por el mismo hecho. El contrato tiene que decir cuándo aplica uno y cuándo el otro.',
+  f:'Circular 22/2010 de Banxico · misma regla en el art. 102-I de la Disposición RECO para no bancos'},
+ {t:'No te pueden cobrar una comisión mayor a la que tienen registrada',
+  d:'Para un banco, la comisión registrada está en el Banco de México. Si te cobran más, es reclamable.',
+  f:'Art. 6 LTOSF · Circular 22/2010'},
+ {t:'No te pueden cobrar dos comisiones por el mismo hecho',
+  d:'Un solo cargo por un solo acto, hecho o evento.',
+  f:'Circular 22/2010 · art. 102-XVIII Disposición RECO'},
+ {t:'No te pueden cobrar por pagarles',
+  d:'Ni en ventanilla, ni en su cajero, ni por transferencia, ni por domiciliación, cuando el crédito es de ellos mismos.',
+  f:'Circular 22/2010 · art. 102-VI Disposición RECO'},
+ {t:'No te pueden cobrar por cancelar la tarjeta',
+  d:'Ni por cancelarla ni por rescindir el contrato de crédito revolvente.',
+  f:'Circular 22/2010 · art. 102-V Disposición RECO'},
+ {t:'No te pueden cobrar pago tardío si el retraso fue culpa suya',
+  d:'Si no acreditaron tu pago en la fecha que les obliga la Circular 22/2008, el cargo no procede. Guarda el comprobante con su hora.',
+  f:'Circular 22/2008 de Banxico · art. 102-VIII Disposición RECO'},
+ {t:'No te pueden cobrar por sobregiro en una tarjeta de crédito',
+  d:'Ni por el sobregiro ni por el intento, en financiamientos revolventes asociados a una tarjeta.',
+  f:'Circular 22/2010 · art. 102-IX Disposición RECO'},
+ {t:'Las comisiones del estado de cuenta tienen que coincidir con las registradas',
+  d:'Lo que aparece en tu estado de cuenta, en la carátula o en su publicidad debe ser lo mismo que tienen registrado.',
+  f:'Art. 6 LTOSF · art. 114 Disposición RECO'},
+];
+
+function vDerechos(){
+  /* Todas las comisiones que te han cobrado, para no leer esto en abstracto.
+     El IVA de una comisión también lo pagas tú, así que va junto. */
+  const coms = ordenados(D.movimientos.filter(m => m.tipo === 'comision'));
+  const totalCom = coms.reduce((s,m) => s + Math.abs(num(m.monto)), 0);
+  const porTarjeta = {};
+  coms.forEach(m => { (porTarjeta[m.tarjetaId] = porTarjeta[m.tarjetaId] || []).push(m); });
+
+  return `<div class="card">
+    <h2>Tus derechos <span class="sub">qué sí y qué no te pueden cobrar</span></h2>
+
+    <div class="aviso ambar">🟡 <b>Lee esto antes que nada.</b> El texto que sigue incluye la
+      <b>Disposición en materia de Registros ante la CONDUSEF</b>, y su artículo 100 dice a quién
+      obliga: SOFOM E.N.R., sociedades financieras populares y comunitarias, cooperativas de ahorro
+      y préstamo y uniones de crédito. <b>Los bancos no están en esa lista.</b> Santander, Banorte y
+      Banregio son instituciones de crédito: registran sus comisiones ante el <b>Banco de México</b>,
+      no ante la CONDUSEF (artículo 6 de la LTOSF).
+      <br><br>Eso <b>no</b> te deja sin defensa: las mismas prohibiciones existen para los bancos en
+      la <b>Circular 22/2010 del Banco de México</b>, y la CONDUSEF te sigue atendiendo quejas y
+      aclaraciones bajo la LPDUSF. Sólo que al reclamar hay que citar la norma correcta, o te la
+      tumban en la primera respuesta.</div>
+
+    <h3 style="margin:22px 0 12px">Las reglas que te sirven</h3>
+    ${REGLAS.map(r => `<div class="libro entra" style="margin-bottom:9px">
+      <div style="font-weight:650;margin-bottom:3px">🚫 ${esc(r.t)}</div>
+      <div class="sub">${esc(r.d)}</div>
+      <div class="sub" style="margin-top:4px;font-size:12px;opacity:.85">${esc(r.f)}</div>
+    </div>`).join('')}
+  </div>
+
+  <div class="card">
+    <h2>Las comisiones que te han cobrado <span class="sub">de lo que tienes capturado</span></h2>
+    ${coms.length ? `
+      <div class="grid g3" style="margin-bottom:14px">
+        ${kpi('Comisiones', money(totalCom), `${coms.length} cargo${coms.length===1?'':'s'}`, 'bad')}
+        ${kpi('Tarjetas afectadas', String(Object.keys(porTarjeta).length), 'con al menos una comisión')}
+        ${kpi('Con IVA incluido', money(totalCom * (1 + IVA)), 'el IVA de una comisión también lo pagas tú', 'bad')}
+      </div>
+      <div class="aviso azul">ℹ️ <b>Cómo revisar cada una.</b> Abre el estado de cuenta del mes y
+        busca la tabla <i>"Saldo sobre el que se calcularon los intereses del periodo"</i>. Si el
+        renglón <b>Moratorios</b> trae un monto (y no "NA"), ese mes te cobraron <b>comisión por
+        falta de pago e intereses moratorios al mismo tiempo</b>, y eso está prohibido. Si dice
+        "NA", sólo hubo comisión y el cobro, en ese punto, se sostiene.</div>
+      <div class="tw"><table>
+        <thead><tr><th>Fecha</th><th>Concepto</th><th>Tarjeta</th><th class="num">Monto</th>
+          <th class="num">Con IVA</th></tr></thead>
+        <tbody>${coms.map(m => `<tr>
+          <td style="white-space:nowrap">${fechaCorta(m.fecha)}</td>
+          <td>${esc(m.descripcion||'(sin concepto)')}</td>
+          <td><span class="dot" style="background:${colTarjeta(m.tarjetaId)}"></span>${esc(nomTarjeta(m.tarjetaId))}</td>
+          <td class="num neg">${money(m.monto)}</td>
+          <td class="num neg">${money(num(m.monto) * (1 + IVA))}</td></tr>`).join('')}
+        </tbody>
+        <tfoot class="totales"><tr><td colspan="3">Total</td>
+          <td class="num neg">${money(totalCom)}</td>
+          <td class="num neg">${money(totalCom * (1 + IVA))}</td></tr></tfoot>
+      </table></div>`
+      : vacioMsg('No tienes ninguna comisión capturada. Qué bueno.')}
+  </div>
+
+  <div class="card">
+    <h2>El texto de la ley</h2>
+    <p class="sub" style="margin-top:0">Extracto del <i>Marco Legal</i> del Registro de Comisiones
+      (RECO) de la CONDUSEF. Cada ley trae marcado si obliga o no a un banco.</p>
+    ${LEYES.map(l => `<details class="card" style="margin:0 0 10px;padding:0">
+      <summary style="padding:13px 15px">
+        <b>${esc(l.sigla)}</b> — ${esc(l.nombre)}
+        <span class="tag ${l.color}" style="margin-left:7px">${l.aplica === 'si'
+          ? 'Sí aplica a tus tarjetas' : 'No aplica a bancos'}</span></summary>
+      <div style="padding:0 15px 15px">
+        <div class="sub" style="margin-bottom:12px">${esc(l.pie)}</div>
+        ${l.arts.map(a => `<div style="margin-bottom:16px">
+          <div style="font-weight:650;margin-bottom:5px">${esc(a.n)}</div>
+          <div class="sub" style="white-space:pre-line;line-height:1.6">${esc(a.t)}</div>
+        </div>`).join('')}
+      </div></details>`).join('')}
+
+    <details class="card" style="margin:0;padding:0">
+      <summary style="padding:13px 15px"><b>Qué revisé de este texto y qué no pude confirmar</b></summary>
+      <div style="padding:0 15px 15px" class="sub" style="line-height:1.6">
+        <p><b>Confirmado:</b> el ámbito del artículo 100 (el RECO no alcanza a los bancos); el
+        artículo 102 y su fracción I; que para los bancos la prohibición equivalente está en la
+        Circular 22/2010 del Banco de México, emitida al amparo del artículo 4 Bis de la LTOSF; y
+        que la Circular 22/2008 que cita la fracción VIII es la que fija las fechas en que deben
+        acreditarse los pagos.</p>
+        <p><b>Ojo con estos puntos del texto original:</b></p>
+        <ul style="margin:0 0 10px 18px;line-height:1.6">
+          <li>Los artículos 93 y 94 de la LPDUSF hablan de multas en <i>"salario mínimo general
+          diario vigente en el Distrito Federal"</i>. Así está redactada la ley, pero desde la
+          reforma constitucional de desindexación de 2016 los montos en días de salario se calculan
+          en <b>UMA</b>. No pude verificarlo contra una fuente oficial en esta sesión.</li>
+          <li>El artículo 4 dice <i>"domicilio en el Distrito Federal"</i>: es el nombre anterior de
+          la Ciudad de México. No cambia nada de fondo.</li>
+          <li>La LPDUSF trae reformas posteriores (la más reciente que vi, de noviembre de 2025),
+          así que este extracto puede no estar al día.</li>
+          <li>El apartado III del original dice que las Disposiciones de 2015 quedaron
+          <b>derogadas desde el 1 de enero de 2023</b>, sustituidas por la Disposición de 2022. Por
+          eso no se incluye aquí.</li>
+          <li>La página de la CONDUSEF repite el bloque de la LPDUSF dos veces; aquí va una sola.</li>
+        </ul>
+        <p><b>Dónde está el original:</b> registros.condusef.gob.mx/reco/marco_legal.php y
+        el PDF de la Disposición en condusef.gob.mx. Para la parte de bancos, la Circular 22/2010
+        está en el portal normativo de Banxico, y la lista de comisiones prohibidas en
+        banxico.org.mx (Servicios financieros y comisiones · Prohibiciones).</p>
+        <p>Esto es material de consulta para que sepas qué citar, no es asesoría legal. Si vas a
+        reclamar, la queja formal se presenta ante la CONDUSEF.</p>
+      </div></details>
+  </div>`;
 }
 </script>
 
