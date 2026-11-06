@@ -90,6 +90,23 @@ usa *Movimientos → + Movimiento*.
 La pestaña **Movimientos** filtra por tarjeta, mes, categoría y texto, y abajo te
 desglosa el gasto por categoría de lo que tengas filtrado.
 
+### Ir tachando cargos mientras pagas
+Cada cargo trae un botón **○** a la izquierda. Le das clic y queda **✓ cubierto**,
+con la fecha en que lo marcaste. Arriba de la tabla llevas la cuenta: cuántos
+cargos de los que estás viendo ya palomeaste y **cuánto suman**, que es justo el
+monto que tienes que mandarle al banco.
+
+Si filtras por una tarjeta, ahí mismo aparece el botón **💵 Registrar abono de
+$X** con esa suma ya puesta, para no volver a teclearla.
+
+> ⚠️ **Palomear no mueve tu saldo, y es a propósito.** Es tu lista para no
+> perderte mientras pagas. Si una palomita bajara la deuda sin que saliera
+> dinero, la app estaría mintiendo igual que el banco. Para que el saldo baje de
+> verdad tienes que registrar el abono.
+
+Los abonos no traen botón: un pago no se "cubre". El filtro **Palomeo** te deja
+ver sólo lo que falta (`○ Cargos sin cubrir`) o sólo lo que ya marcaste.
+
 ### Leer la tabla de estados de cuenta
 Cada renglón trae la operación completa, de izquierda a derecha:
 
@@ -186,6 +203,23 @@ cortes no alcanzaste a liquidar.
 
 Ojo con la trampa clásica: **pagar el mínimo no baja la deuda**. Cubre los
 intereses y poco más. La app marca cada corte donde eso pasó.
+
+### "¿Esto me lo pueden cobrar?"
+La pestaña **Tus derechos** junta las reglas de qué sí y qué no te puede cobrar
+un banco, y abajo lista **todas las comisiones que te han cobrado** según lo que
+tengas capturado, con su IVA.
+
+Lo primero que dice esa pestaña es la trampa más común al reclamar: la
+*Disposición en materia de Registros ante la CONDUSEF* —que es el texto que
+casi siempre aparece cuando uno busca "comisiones prohibidas"— **no obliga a los
+bancos**. Su artículo 100 la limita a SOFOM E.N.R., sociedades financieras
+populares y comunitarias, cooperativas de ahorro y préstamo y uniones de
+crédito. Un banco registra sus comisiones ante el **Banco de México** (artículo
+6 de la LTOSF) y sus prohibiciones viven en la **Circular 22/2010**. Las reglas
+de fondo son las mismas; lo que cambia es qué norma hay que citar.
+
+La pestaña trae el texto de los artículos y una nota de qué se pudo verificar y
+qué no.
 
 ### "De repente es día de pago y son $5,900 que no tenía contemplado"
 El **Resumen** te avisa cuando falten 12 días o menos para una fecha límite,
@@ -285,8 +319,9 @@ Abre `index.html` en un Chromium de verdad, le carga estados de cuenta
 **inventados** y compara lo que calcula contra números hechos a mano: la
 conciliación de cada corte, los dos tipos de pago (el que cae dentro del periodo
 y el que liquida el corte), los dos mínimos cuando hay compras a meses, el
-excedente, qué cuenta como dinero tuyo y que cargar el mismo corte dos veces no
-duplique nada.
+excedente, qué cuenta como dinero tuyo, que cargar el mismo corte dos veces no
+duplique nada y que **palomear un cargo no mueva el saldo ni descuadre la
+conciliación**.
 
 Los datos de las pruebas son falsos a propósito: las cifras reales de nadie
 entran al repositorio.
